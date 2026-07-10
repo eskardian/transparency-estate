@@ -1,0 +1,1169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Kampika — карта объектов</title>
+  <link rel="icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2b2b29">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Kampika">
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=6bb07a4b-93d2-43ca-ae69-6e80d31c02fb&lang=ru_RU"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="vibe.js" defer></script>
+  <style>
+    :root{ --bg:#f5f3ef; --card:#fff; --ink:#2b2b29; --muted:#8a8782; --line:#e3dfd8; --accent:#6b7257; --shadow:0 6px 24px rgba(0,0,0,.12); }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; height:100%; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+    button{ font-family:inherit; cursor:pointer; }
+    input,textarea,select{ font-family:inherit; font-size:15px; }
+    .btn{ padding:9px 14px; background:var(--ink); color:#fff; border:0; border-radius:8px; font-size:14px; }
+    .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+    .btn.danger{ background:#b4453a; }
+    .btn:disabled{ opacity:.5; cursor:default; }
+    .badge{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; color:#fff; white-space:nowrap; }
+
+    /* вход */
+    #auth{ position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:50; }
+    #auth .card{ width:320px; text-align:center; }
+    #auth h1{ font-size:24px; font-weight:600; margin:0; letter-spacing:.5px; }
+    #auth p{ color:var(--muted); font-size:14px; margin:4px 0 0; }
+    #auth input{ width:100%; padding:12px; border:1px solid var(--line); border-radius:8px; margin:16px 0 8px; background:#fff; }
+    #auth .btn{ width:100%; }
+    #auth .msg{ font-size:13px; color:var(--accent); margin-top:12px; min-height:18px; }
+
+    /* приложение */
+    #app{ display:none; height:100%; flex-direction:column; }
+    header{ height:52px; flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:0 14px; background:var(--card); border-bottom:1px solid var(--line); z-index:20; }
+    header .logo{ font-weight:600; letter-spacing:.5px; }
+    header .spacer{ flex:1; }
+    header .who{ font-size:13px; color:var(--muted); }
+    header .who b{ color:var(--ink); font-weight:500; }
+    .admin-tag{ font-size:11px; background:var(--accent); color:#fff; padding:1px 7px; border-radius:999px; }
+    .hmenu{ background:none; border:0; font-size:20px; padding:4px 8px; display:none; }
+    .bell{ position:relative; background:none; border:0; font-size:19px; padding:4px 6px; line-height:1; }
+    .bell-badge{ position:absolute; top:-1px; right:-1px; background:#b4453a; color:#fff; font-size:10px; min-width:16px; height:16px; border-radius:999px; padding:0 4px; display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; }
+    #bellList{ position:fixed; top:50px; right:10px; width:320px; max-width:92vw; max-height:64vh; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); z-index:45; display:none; }
+    #bellList.open{ display:block; }
+    #bellList .bl-head{ font-size:13px; color:var(--muted); padding:12px 14px 4px; }
+    /* прогресс по этапам + быстрые теги + микрофон */
+    .stages-wrap{ margin:8px 0 12px; }
+    .stages{ display:flex; gap:3px; }
+    .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
+    .stages-cap{ font-size:12px; color:var(--muted); margin-top:5px; }
+    .quick-tags{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+    .qtag{ font-size:12px; padding:6px 10px; border-radius:999px; border:1px dashed var(--line); background:#fff; color:var(--muted); }
+    .feed-mic-row{ margin-top:8px; }
+    #feedMic{ width:100%; }
+    /* документы */
+    .docs-list{ display:flex; flex-direction:column; gap:6px; margin:6px 0; }
+    .doc-row{ display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; }
+    .doc-row .dn{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; color:var(--ink); }
+    .doc-row .drm{ background:none; border:0; color:#b4453a; font-size:12px; cursor:pointer; }
+    .doc-up{ display:inline-block; font-size:13px; padding:8px 12px; border:1px dashed var(--line); border-radius:8px; cursor:pointer; color:var(--muted); }
+    /* кандидаты адреса в форме «Новый объект» */
+    .addr-opt{ display:block; width:100%; text-align:left; padding:9px 11px; margin-top:6px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:13px; cursor:pointer; }
+    .addr-opt:hover{ border-color:#d8d3c8; }
+    .addr-kind{ color:var(--muted); font-size:11px; margin-left:6px; }
+    /* меню аккаунта в шапке */
+    .acct{ position:relative; }
+    #acctBtn{ font-size:18px; line-height:1; padding:5px 10px; }
+    .acct-menu{ position:absolute; right:0; top:42px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:6px; display:none; flex-direction:column; min-width:190px; z-index:46; }
+    .acct-menu.open{ display:flex; }
+    .acct-menu .acct-email{ font-size:12px; color:var(--muted); padding:8px 10px 10px; border-bottom:1px solid var(--line); margin-bottom:4px; word-break:break-all; }
+    .acct-menu button{ text-align:left; background:none; border:0; padding:9px 10px; border-radius:8px; font-size:14px; color:var(--ink); cursor:pointer; }
+    .acct-menu button:hover{ background:#f1efe9; }
+    /* экран контента */
+    #content{ position:absolute; top:0; right:0; bottom:0; left:300px; background:var(--bg); overflow:auto; z-index:16; display:none; padding:16px; }
+    .content-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+    .content-cell{ position:relative; }
+    .content-cell img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; cursor:pointer; }
+    .content-cell .cc-obj{ font-size:11px; color:var(--muted); margin-top:3px; }
+    .content-cell .cc-rm{ position:absolute; top:5px; right:5px; background:rgba(0,0,0,.55); color:#fff; border:0; border-radius:50%; width:24px; height:24px; cursor:pointer; }
+    /* флажок в лайтбоксе */
+    .lb-flag{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; border:0; padding:11px 18px; border-radius:999px; font-size:14px; cursor:pointer; z-index:71; }
+    /* офлайн-очередь */
+    #pending{ position:fixed; bottom:20px; left:20px; background:#d68a3a; color:#fff; padding:9px 14px; border-radius:999px; font-size:13px; z-index:58; box-shadow:var(--shadow); }
+
+    .body{ flex:1; display:flex; min-height:0; position:relative; }
+    /* сайдбар */
+    #sidebar{ width:300px; flex:0 0 auto; background:var(--card); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+    #sidebar .top{ padding:12px; border-bottom:1px solid var(--line); }
+    #search{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; }
+    #sort{ width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); }
+    #filters{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .chip{ font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--muted); }
+    .chip.active{ color:#fff; border-color:transparent; }
+    #list{ flex:1; overflow:auto; }
+    .row{ display:flex; gap:10px; padding:11px 12px; border-bottom:1px solid var(--line); cursor:pointer; align-items:center; }
+    .row:hover{ background:#faf8f4; }
+    .row.sel{ background:#f0ede6; }
+    .row img{ width:46px; height:46px; border-radius:8px; object-fit:cover; flex:0 0 auto; background:#eee; }
+    .row .meta{ min-width:0; }
+    .row .meta .nm{ font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .row .meta .sub{ font-size:12px; color:var(--muted); margin-top:3px; display:flex; align-items:center; gap:6px; }
+    .addbtn{ margin:12px; }
+    .empty{ padding:24px 16px; color:var(--muted); font-size:13px; text-align:center; }
+
+    #map{ flex:1; min-width:0; }
+
+    /* плавающие кнопки на карте */
+    .mapfab{ position:absolute; right:14px; z-index:15; display:flex; flex-direction:column; gap:8px; }
+    .mapfab button{ width:42px; height:42px; border-radius:50%; border:0; background:var(--card); box-shadow:var(--shadow); font-size:18px; }
+    .pickbar{ position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:18; background:var(--ink); color:#fff; padding:9px 16px; border-radius:999px; font-size:14px; box-shadow:var(--shadow); display:none; align-items:center; gap:12px; }
+    .pickbar button{ background:none; border:0; color:#fff; text-decoration:underline; font-size:13px; }
+
+    /* панель объекта */
+    #panel{ position:absolute; top:0; right:0; height:100%; width:380px; max-width:92vw; background:var(--card); box-shadow:var(--shadow); transform:translateX(105%); transition:transform .25s ease; z-index:25; display:flex; flex-direction:column; }
+    #panel.open{ transform:none; }
+    #panel .phead{ position:relative; flex:0 0 auto; }
+    #panel .cover{ width:100%; height:160px; object-fit:cover; background:#ece8e0; display:block; }
+    #panel .pclose{ position:absolute; top:10px; right:10px; width:34px; height:34px; border-radius:50%; border:0; background:rgba(0,0,0,.5); color:#fff; font-size:18px; }
+    #panel .pbody{ flex:1; overflow:auto; padding:16px; }
+    #panel h2{ font-size:19px; margin:0 0 4px; }
+    #panel .pmeta{ font-size:13px; color:var(--muted); margin-bottom:6px; }
+    #panel .paddr{ font-size:13px; color:var(--muted); margin-bottom:12px; }
+    .routes{ display:flex; gap:8px; margin:12px 0; }
+    .routes a{ flex:1; text-align:center; padding:9px; border-radius:8px; text-decoration:none; font-size:13px; }
+    .routes a.ya{ background:var(--ink); color:#fff; }
+    .routes a.gis{ background:#37a04a; color:#fff; }
+    .pactions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .pactions .btn{ flex:1 1 auto; font-size:13px; padding:8px 10px; white-space:nowrap; }
+    .section-title{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:16px 0 8px; }
+    .feed-item{ border-left:2px solid var(--line); padding:0 0 14px 12px; position:relative; }
+    .feed-item:before{ content:''; position:absolute; left:-5px; top:4px; width:8px; height:8px; border-radius:50%; background:var(--accent); }
+    .feed-item .ftop{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+    .feed-item .fdate{ font-size:11px; color:var(--muted); }
+    .feed-item .fbody{ font-size:14px; white-space:pre-wrap; }
+    .feed-item .fphotos{ display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+    .feed-item .fphotos img{ width:60px; height:60px; object-fit:cover; border-radius:6px; cursor:pointer; }
+    .fvis{ font-size:12px; color:var(--muted); margin-top:6px; }
+    .fvis.pending{ color:#d68a3a; }
+    .fvis-btn{ background:none; border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:12px; color:var(--ink); margin-left:6px; cursor:pointer; }
+    .addfeed{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:8px; }
+    .addfeed textarea{ width:100%; border:1px solid var(--line); border-radius:8px; padding:9px; resize:vertical; min-height:54px; }
+    .addfeed .frow{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+    .addfeed select{ flex:1; padding:8px; border:1px solid var(--line); border-radius:8px; }
+    .filehint{ font-size:12px; color:var(--muted); }
+    /* быстрый отчёт с поля */
+    .camera-btn{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:15px; background:var(--accent); color:#fff; border-radius:10px; font-size:16px; font-weight:500; cursor:pointer; }
+    .feed-thumbs{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .feed-thumbs img{ width:54px; height:54px; object-fit:cover; border-radius:6px; }
+    .status-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+    .status-chip{ font-size:13px; padding:8px 13px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+    .status-chip.active{ border-color:transparent; }
+    .btn.big{ width:100%; padding:13px; font-size:15px; margin-top:4px; }
+    /* вкладки Карта / Активность */
+    .viewtabs{ display:flex; background:var(--bg); border-radius:8px; padding:3px; gap:2px; }
+    .vt{ border:0; background:none; padding:6px 14px; border-radius:6px; font-size:13px; color:var(--muted); cursor:pointer; }
+    .vt.active{ background:var(--card); color:var(--ink); font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+    /* экран активности */
+    #activity{ position:absolute; top:0; right:0; bottom:0; left:300px; background:var(--bg); overflow:auto; z-index:16; display:none; }
+    .act-head{ font-size:13px; color:var(--muted); padding:14px 16px 6px; }
+    .act-item{ display:flex; gap:11px; padding:12px 16px; border-bottom:1px solid var(--line); cursor:pointer; background:var(--card); }
+    .act-item:hover{ background:#faf8f4; }
+    .act-item img{ width:54px; height:54px; border-radius:8px; object-fit:cover; flex:0 0 auto; background:#eee; }
+    .act-item .ai-obj{ font-size:14px; font-weight:500; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .act-item .ai-body{ font-size:13px; margin-top:3px; }
+    .act-item .ai-time{ font-size:11px; color:var(--muted); margin-top:3px; }
+
+    /* админ-панель */
+    #admin{ position:fixed; inset:52px 0 0 0; background:var(--bg); overflow:auto; z-index:38; display:none; }
+    .adm-wrap{ max-width:760px; margin:0 auto; padding:22px 18px 60px; }
+    .adm-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .adm-top h2{ font-size:20px; margin:0; }
+    .adm-sec{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:22px 0 10px; }
+    .cards{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .card-co{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+    .card-co h3{ margin:0 0 8px; font-size:15px; }
+    .card-co .big-num{ font-size:26px; font-weight:600; }
+    .card-co .sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .card-co .mini{ display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+    .card-co .mini .badge{ font-size:11px; }
+    .card-co .od{ color:#b4453a; font-size:12px; margin-top:8px; }
+    .team{ background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .team-row{ display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+    .team-row:last-child{ border-bottom:0; }
+    .team-row .em{ flex:1; min-width:150px; font-size:14px; word-break:break-all; }
+    .team-row select{ padding:6px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; background:#fff; }
+    .team-row .rm{ background:none; border:0; color:#b4453a; font-size:13px; cursor:pointer; }
+    .team-add{ display:flex; gap:8px; flex-wrap:wrap; padding:12px 14px; background:#faf8f4; align-items:center; }
+    .team-add input{ flex:1; min-width:160px; padding:9px 10px; border:1px solid var(--line); border-radius:7px; }
+    .team-add select{ padding:9px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+    .adm-close{ width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:16px; cursor:pointer; }
+
+    /* модалка */
+    #modal{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:center; justify-content:center; z-index:40; padding:16px; }
+    #modal.open{ display:flex; }
+    .mbox{ background:var(--card); border-radius:14px; width:380px; max-width:100%; max-height:90vh; overflow:auto; padding:20px; }
+    .mbox h3{ margin:0 0 14px; font-size:17px; }
+    .field{ margin-bottom:12px; }
+    .field label{ display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+    .field input,.field select,.field textarea{ width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; }
+    .mbox .mactions{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+    .accrow{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+    .accrow button{ background:none; border:0; color:#b4453a; font-size:12px; }
+
+    /* тосты, лайтбокс */
+    #toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 18px; border-radius:999px; font-size:14px; z-index:60; opacity:0; transition:opacity .2s; box-shadow:var(--shadow); }
+    #toast.show{ opacity:1; }
+    #lightbox{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; z-index:70; }
+    #lightbox.open{ display:flex; }
+    #lightbox img{ max-width:92vw; max-height:92vh; border-radius:8px; }
+
+    @media(max-width:640px){
+      .hmenu{ display:block; }
+      #sidebar{ position:absolute; top:0; left:0; height:100%; z-index:30; transform:translateX(-105%); transition:transform .25s; box-shadow:var(--shadow); }
+      #sidebar.open{ transform:none; }
+      #activity,#content{ left:0; }
+      .logo,.who{ display:none; }
+    }
+  </style>
+  <link rel="stylesheet" href="polish.css">
+</head>
+<body>
+  <!-- ВХОД -->
+  <div id="auth">
+    <div class="card">
+      <h1>KAMPIKA</h1>
+      <p>Карта объектов</p>
+      <input id="email" type="email" placeholder="Почта" autocomplete="email">
+      <input id="password" type="password" placeholder="Пароль" autocomplete="current-password">
+      <button class="btn" id="login">Войти</button>
+      <button class="btn ghost" id="signup" style="width:100%;margin-top:8px">Создать аккаунт</button>
+      <div class="msg" id="msg"></div>
+      <a id="maglink">Войти по ссылке на почту</a>
+    </div>
+  </div>
+
+  <!-- ПРИЛОЖЕНИЕ -->
+  <div id="app">
+    <header>
+      <button class="hmenu" id="hmenu">☰</button>
+      <span class="logo">KAMPIKA</span>
+      <div class="viewtabs">
+        <button class="vt active" id="tabMap">Карта</button>
+        <button class="vt" id="tabAct">Активность</button>
+        <button class="vt" id="tabContent" style="display:none">Контент</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="bell" id="bell" title="Новые отчёты">🔔<span class="bell-badge" id="bellBadge" style="display:none">0</span></button>
+      <div class="acct">
+        <button class="btn ghost" id="acctBtn" title="Аккаунт">⋯</button>
+        <div class="acct-menu" id="acctMenu">
+          <div class="acct-email"><b id="whoEmail"></b> <span class="admin-tag" id="adminTag" style="display:none">админ</span></div>
+          <button id="adminBtn" style="display:none">Админ-панель</button>
+          <button id="pwBtn">Пароль для входа</button>
+          <button id="logout">Выйти</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="body">
+      <aside id="sidebar">
+        <div class="top">
+          <select id="company" style="display:none;width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:500">
+            <option value="">Все компании</option>
+            <option value="kampika">Kampika</option>
+            <option value="zelege">Zelege</option>
+          </select>
+          <input id="search" placeholder="Поиск объекта…">
+          <select id="sort">
+            <option value="updated">Сначала обновлённые</option>
+            <option value="due">По сроку</option>
+            <option value="name">По названию</option>
+          </select>
+          <div id="filters"></div>
+        </div>
+        <div id="list"></div>
+        <button class="btn addbtn" id="addObj">+ Добавить объект</button>
+      </aside>
+
+      <div id="map"></div>
+      <div class="pickbar" id="pickbar">Кликните на карте, где находится объект <button id="cancelPick">отмена</button></div>
+      <div class="mapfab" style="bottom:20px">
+        <button id="myloc" title="Где я">◎</button>
+      </div>
+
+      <!-- ЭКРАН АКТИВНОСТИ -->
+      <div id="activity"></div>
+      <!-- ЭКРАН КОНТЕНТА -->
+      <div id="content"></div>
+
+      <!-- ПАНЕЛЬ ОБЪЕКТА -->
+      <div id="panel">
+        <div class="phead">
+          <img class="cover" id="pCover" alt="">
+          <button class="pclose" id="pClose">✕</button>
+        </div>
+        <div class="pbody" id="pBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- АДМИН-ПАНЕЛЬ -->
+  <div id="admin"></div>
+
+  <!-- МОДАЛКА -->
+  <div id="modal"><div class="mbox" id="mbox"></div></div>
+  <!-- СПИСОК УВЕДОМЛЕНИЙ -->
+  <div id="bellList"></div>
+  <!-- ОФЛАЙН-ОЧЕРЕДЬ / ТОСТ / ЛАЙТБОКС -->
+  <div id="pending" style="display:none"></div>
+  <div id="toast"></div>
+  <div id="lightbox"><img id="lbImg" src="" alt=""><button id="lbFlag" class="lb-flag" style="display:none">★ В контент</button></div>
+
+  <script>
+  // ───────────────────────── Конфиг ─────────────────────────
+  const SUPABASE_URL = "https://pqmjulphghojlaijffty.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_yrj4fEkOl0uGoKT1i_NgyQ_vGrbi73Z";
+  // ponytail: no-op lock — обходит зависание авторизации supabase-js на iOS/PWA (navigator.locks deadlock)
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: (_name, _timeout, fn) => fn() }
+  });
+
+  // Статусы и их цвета (маркеры на карте + бейджи)
+  const STATUSES = [
+    { label:'Проектирование',        color:'#5b7fa6' },
+    { label:'Идёт планировка',       color:'#d68a3a' },
+    { label:'Стройка',               color:'#b4453a' },
+    { label:'Посадка крупномеров',   color:'#6b7257' },
+    { label:'Благоустройство',       color:'#8a6ba6' },
+    { label:'Завершён',              color:'#8a8782' },
+  ];
+  const statusColor = s => (STATUSES.find(x=>x.label===s)||{color:'#8a8782'}).color;
+
+  // Компании (два направления)
+  const COMPANIES = [{ id:'kampika', label:'Kampika' }, { id:'zelege', label:'Zelege' }];
+  const companyLabel = id => (COMPANIES.find(c=>c.id===id)||{label:id||'—'}).label;
+  // точность найденного адреса (Яндекс kind → русское)
+  const kindLabel = k => ({house:'дом',street:'улица',metro:'метро',district:'район',locality:'город',province:'регион',area:'район',country:'страна',entrance:'подъезд',route:'маршрут',vegetation:'местность',hydro:'водоём',airport:'аэропорт'}[k]||'');
+
+  // Быстрые теги для отчёта + статусы, требующие фото + распознавание речи
+  const QUICK_TAGS = ['Бригада на месте','Завезли материал','Простой','Готово к проверке'];
+  const REQUIRE_PHOTO = ['Завершён'];
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // ───────────────────────── Состояние ─────────────────────────
+  let map, clusterer, currentUser=null, isAdmin=false;
+  let objects=[], placemarks={}, selectedId=null;
+  let filterStatus=null, searchText='', pickMode=false, sortBy='updated';
+  let myCompany=null, isSuper=false, companyFilter=null;
+  const inCompany = o => !companyFilter || o.company===companyFilter;
+  const canManage = o => isSuper || (isAdmin && myCompany===o.company);  // админ компании или супер
+
+  // ───────────────────────── Утилиты ─────────────────────────
+  const $ = id => document.getElementById(id);
+  const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  function routeYandex(lat, lon){ return `https://yandex.ru/maps/?rtext=~${lat},${lon}&rtt=auto`; }
+  function route2gis(lat, lon){ return `https://2gis.ru/directions/points/%7C${lon}%2C${lat}`; }
+  function relDate(d){
+    const s=(Date.now()-new Date(d).getTime())/1000;
+    if(s<60) return 'только что';
+    if(s<3600) return Math.floor(s/60)+' мин назад';
+    if(s<86400) return Math.floor(s/3600)+' ч назад';
+    if(s<604800) return Math.floor(s/86400)+' дн назад';
+    return new Date(d).toLocaleDateString('ru-RU');
+  }
+  function dueOverdue(d){ return d && new Date(d) < new Date(new Date().toDateString()); }
+  let toastT;
+  function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+  let lbCurrent=null;
+  function openLightbox(url, objectId){
+    lbCurrent = objectId!=null ? {url, objectId} : null;
+    $('lbImg').src=url; $('lightbox').classList.add('open');
+    $('lbFlag').style.display = (objectId!=null && currentUser) ? 'block' : 'none';
+  }
+  $('lightbox').onclick = e=>{ if(e.target.id==='lightbox' || e.target.id==='lbImg') $('lightbox').classList.remove('open'); };
+  $('lbFlag').onclick = async e=>{
+    e.stopPropagation(); if(!lbCurrent) return;
+    const { error } = await sb.from('content_photos').upsert({ object_id:lbCurrent.objectId, url:lbCurrent.url, added_by:currentUser.id }, { onConflict:'url' });
+    toast(error ? 'Ошибка: '+error.message : 'Добавлено в контент');
+  };
+
+  // самопроверки чистых функций (видны в консоли при поломке)
+  console.assert(routeYandex(55.75,37.4)==='https://yandex.ru/maps/?rtext=~55.75,37.4&rtt=auto','routeYandex');
+  console.assert(statusColor('Стройка')==='#b4453a','statusColor');
+  console.assert(esc('<b>')==='&lt;b&gt;','esc');
+  console.assert(dueOverdue('2000-01-01')===true && dueOverdue('2999-01-01')===false,'dueOverdue');
+
+  // ───────────────────────── Хранилище фото ─────────────────────────
+  async function uploadPhoto(file, folder){
+    const safe = file.name.replace(/[^\w.\-]/g,'_');
+    const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safe}`;
+    const { error } = await sb.storage.from('photos').upload(path, file);
+    if(error){ toast('Фото: '+error.message); return null; }
+    return sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
+  }
+
+  // ───────────────────────── Загрузка данных ─────────────────────────
+  async function reload(){
+    const { data, error } = await sb.from('objects').select('*, feed_entries(*)').order('updated_at',{ascending:false});
+    if(error){ toast('Загрузка: '+error.message); return; }
+    objects = data||[];
+    renderMarkers(); renderSidebar(); updateBell();
+    if($('activity').style.display==='block') renderActivity();
+    if(selectedId!=null && objects.find(o=>o.id===selectedId)) renderPanel(selectedId);
+  }
+
+  // ───────────────────────── Карта ─────────────────────────
+  function renderMarkers(){
+    if(!clusterer) return;
+    clusterer.removeAll(); placemarks={};
+    objects.filter(inCompany).forEach(o=>{
+      const pm = new ymaps.Placemark([o.lat,o.lon],
+        { hintContent:o.name },
+        { preset:'islands#dotIcon', iconColor:statusColor(o.status) });
+      pm.events.add('click', ()=> selectObject(o.id));
+      placemarks[o.id]=pm;
+      clusterer.add(pm);
+    });
+  }
+  function selectObject(id){
+    const o = objects.find(x=>x.id===id); if(!o) return;
+    map.panTo([o.lat,o.lon],{flying:true});
+    renderPanel(id);
+    renderSidebar();
+  }
+
+  // ───────────────────────── Сайдбар ─────────────────────────
+  function renderFilters(){
+    const wrap=$('filters'); wrap.innerHTML='';
+    const mk=(label,val,color)=>{
+      const c=document.createElement('button');
+      c.className='chip'+(filterStatus===val?' active':'');
+      c.textContent=label;
+      if(filterStatus===val && color) c.style.background=color;
+      c.onclick=()=>{ filterStatus = filterStatus===val?null:val; renderFilters(); renderSidebar(); };
+      wrap.appendChild(c);
+    };
+    const scope = objects.filter(inCompany);
+    const counts={}; scope.forEach(o=>counts[o.status]=(counts[o.status]||0)+1);
+    mk(`Все ${scope.length}`,null,null);
+    STATUSES.forEach(s=>mk(`${s.label} ${counts[s.label]||0}`,s.label,s.color));
+  }
+  function visibleObjects(){
+    const f = objects.filter(o=>{
+      if(!inCompany(o)) return false;
+      if(filterStatus && o.status!==filterStatus) return false;
+      if(searchText && !(`${o.name} ${o.address||''}`.toLowerCase().includes(searchText))) return false;
+      return true;
+    });
+    if(sortBy==='name') f.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
+    else if(sortBy==='due') f.sort((a,b)=>(a.due_date||'9999-99')<(b.due_date||'9999-99')?-1:1);
+    else f.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+    return f;
+  }
+  function renderSidebar(){
+    const list=$('list'); const vis=visibleObjects();
+    if(!objects.length){ list.innerHTML='<div class="empty">Объектов пока нет.<br>Нажмите «Добавить объект».</div>'; return; }
+    if(!vis.length){ list.innerHTML='<div class="empty">Ничего не найдено.</div>'; return; }
+    list.innerHTML = vis.map(o=>`
+      <div class="row ${o.id===selectedId?'sel':''}" data-id="${o.id}">
+        <img src="${o.cover_url||'icon.svg'}" alt="">
+        <div class="meta">
+          <div class="nm">${esc(o.name)}</div>
+          <div class="sub"><span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span> ${relDate(o.updated_at)}</div>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('.row').forEach(r=> r.onclick=()=>{ selectObject(+r.dataset.id); if(window.innerWidth<=640) $('sidebar').classList.remove('open'); });
+  }
+
+  // ───────────────────────── Этапы / PDF / голос ─────────────────────────
+  function stagesBar(status){
+    const idx = STATUSES.findIndex(s=>s.label===status);
+    const segs = STATUSES.map((s,i)=>`<span class="seg" style="${i<=idx?`background:${s.color};`:''}"></span>`).join('');
+    return `<div class="stages-wrap"><div class="stages">${segs}</div>
+      <div class="stages-cap">Этап ${idx>=0?idx+1:'—'} из ${STATUSES.length}${idx>=0?` · ${esc(STATUSES[idx].label)}`:''}</div></div>`;
+  }
+  function printReport(o){
+    const feed=(o.feed_entries||[]).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const w=window.open('','_blank');
+    if(!w){ toast('Разреши всплывающие окна для печати'); return; }
+    w.document.write(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${esc(o.name)} — отчёт</title>
+      <style>body{font-family:-apple-system,Arial,sans-serif;color:#2b2b29;max-width:720px;margin:24px auto;padding:0 16px}
+      h1{font-size:22px;margin:0 0 4px}.meta{color:#666;font-size:13px;margin-bottom:16px}
+      .it{border-top:1px solid #ddd;padding:12px 0}.it .d{color:#888;font-size:12px}
+      .it .s{display:inline-block;background:#6b7257;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-right:6px}
+      .ph{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.ph img{width:120px;height:120px;object-fit:cover;border-radius:6px}
+      @media print{.no{display:none}}</style></head><body>
+      <h1>${esc(o.name)}</h1>
+      <div class="meta">${esc(companyLabel(o.company))}${o.address?' · '+esc(o.address):''} · статус: ${esc(o.status||'—')}${o.due_date?' · срок '+new Date(o.due_date).toLocaleDateString('ru-RU'):''}</div>
+      <button class="no" onclick="window.print()" style="margin-bottom:14px;padding:9px 14px;border:0;background:#2b2b29;color:#fff;border-radius:8px;cursor:pointer">Печать / Сохранить PDF</button>
+      ${feed.length? feed.map(f=>`<div class="it"><div class="d">${f.status?`<span class="s">${esc(f.status)}</span>`:''}${new Date(f.created_at).toLocaleString('ru-RU')}</div>
+        <div>${esc(f.body||'')}</div>${(f.photos||[]).length?`<div class="ph">${f.photos.map(p=>`<img src="${esc(p)}">`).join('')}</div>`:''}</div>`).join('') : '<p>Записей нет.</p>'}
+      </body></html>`);
+    w.document.close();
+  }
+  function startDictation(){
+    if(!SpeechRec){ toast('Голосовой ввод не поддерживается'); return; }
+    const r=new SpeechRec(); r.lang='ru-RU'; r.interimResults=false;
+    const mic=$('feedMic'); mic.textContent='🎤 Слушаю…'; mic.disabled=true;
+    r.onresult=e=>{ const t=$('feedText'); t.value=(t.value?t.value+' ':'')+e.results[0][0].transcript; };
+    r.onerror=()=> toast('Не расслышал, повтори');
+    r.onend=()=>{ mic.textContent='🎤 Надиктовать'; mic.disabled=false; };
+    r.start();
+  }
+
+  // ───────────────────────── Панель объекта ─────────────────────────
+  function renderPanel(id){
+    const o = objects.find(x=>x.id===id); if(!o) return;
+    // сохранить недописанный отчёт: reload()/flushQueue() перерисовывают панель и не должны стирать ввод
+    let prevForm=null;
+    if(selectedId===id && $('feedText')){
+      const chip=$('feedStatusChips') && $('feedStatusChips').querySelector('.status-chip.active');
+      prevForm={ text:$('feedText').value, status:chip?chip.dataset.status:null, files:[...($('feedPhotos')?$('feedPhotos').files:[])] };
+    }
+    selectedId=id;
+    $('panel').classList.add('open');
+    $('pCover').src = o.cover_url||'icon.svg';
+    const feed = (o.feed_entries||[]).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    $('pBody').innerHTML = `
+      <h2>${esc(o.name)}</h2>
+      <div class="pmeta"><span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span> · обновлено ${relDate(o.updated_at)}</div>
+      ${stagesBar(o.status)}
+      ${isSuper?`<div class="paddr">🏢 ${esc(companyLabel(o.company))}</div>`:''}
+      ${o.address?`<div class="paddr">📍 ${esc(o.address)}</div>`:''}
+      ${o.manager?`<div class="paddr">👤 ${esc(o.manager)}${o.phone?` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>`:''}</div>`:''}
+      ${o.due_date?`<div class="paddr" style="${dueOverdue(o.due_date)?'color:#b4453a':''}">🗓 срок ${new Date(o.due_date).toLocaleDateString('ru-RU')}${dueOverdue(o.due_date)?' · просрочено':''}</div>`:''}
+      <div class="routes">
+        <a class="ya" href="${routeYandex(o.lat,o.lon)}" target="_blank">Маршрут · Яндекс</a>
+        <a class="gis" href="${route2gis(o.lat,o.lon)}" target="_blank">2ГИС</a>
+      </div>
+      <div class="pactions">
+        <button class="btn ghost" id="editObj">Редактировать</button>
+        <button class="btn ghost" id="pdfObj">PDF</button>
+        ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
+        ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
+        ${isAdmin?'<button class="btn danger" id="delObj">Удалить</button>':''}
+      </div>
+      ${canManage(o)?'<div class="section-title">Документы <span style="text-transform:none;letter-spacing:0">· только админ</span></div><div id="docsSection"><div class="empty" style="text-align:left;padding:4px 0">Загрузка…</div></div>':''}
+      <div class="section-title">Отчёт с объекта</div>
+      <div class="addfeed">
+        <label class="camera-btn">📷 Снять / выбрать фото
+          <input type="file" id="feedPhotos" accept="image/*" capture="environment" multiple hidden>
+        </label>
+        <div class="feed-thumbs" id="feedThumbs"></div>
+        <div class="status-chips" id="feedStatusChips">
+          ${STATUSES.map(s=>`<button class="status-chip" data-status="${esc(s.label)}">${esc(s.label)}</button>`).join('')}
+        </div>
+        <div class="quick-tags" id="quickTags">${QUICK_TAGS.map(t=>`<button class="qtag" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+        <textarea id="feedText" placeholder="Комментарий (необязательно)…"></textarea>
+        <div class="feed-mic-row"><button class="btn ghost" id="feedMic" type="button">🎤 Надиктовать</button></div>
+        <button class="btn big" id="feedAdd">Добавить отчёт</button>
+      </div>
+      <div class="section-title">История</div>
+      ${feed.length? feed.map(f=>`
+        <div class="feed-item">
+          <div class="ftop">
+            ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}
+            <span class="fdate">${new Date(f.created_at).toLocaleString('ru-RU')}</span>
+          </div>
+          <div class="fbody">${esc(f.body)}</div>
+          ${(f.photos||[]).length?`<div class="fphotos">${f.photos.map(p=>`<img src="${p}" data-full="${p}">`).join('')}</div>`:''}
+          ${canManage(o)&&f.client_state!==undefined?`<div class="fvis ${esc(f.client_state)}">${
+            f.client_state==='approved'?'клиент видит':f.client_state==='hidden'?'скрыто от клиента':'ждёт согласования'
+          }<button class="fvis-btn" data-fid="${f.id}" data-to="${f.client_state==='approved'?'hidden':'approved'}">${f.client_state==='approved'?'скрыть':'показать клиенту'}</button></div>`:''}
+        </div>`).join('') : '<div class="empty" style="text-align:left;padding:8px 0">Записей пока нет.</div>'}
+    `;
+    // обработчики
+    $('feedAdd').onclick = ()=> addEntry(id);
+    $('feedPhotos').onchange = ()=>{
+      $('feedThumbs').innerHTML = [...$('feedPhotos').files].map(f=>`<img src="${URL.createObjectURL(f)}">`).join('');
+    };
+    $('feedStatusChips').querySelectorAll('.status-chip').forEach(c=> c.onclick=()=>{
+      const was=c.classList.contains('active');
+      $('feedStatusChips').querySelectorAll('.status-chip').forEach(x=>{ x.classList.remove('active'); x.style.background=''; x.style.color=''; });
+      if(!was){ c.classList.add('active'); c.style.background=statusColor(c.dataset.status); c.style.color='#fff'; }
+    });
+    $('quickTags').querySelectorAll('.qtag').forEach(b=> b.onclick=()=>{ const t=$('feedText'); t.value=(t.value?t.value+', ':'')+b.dataset.t; });
+    if(!SpeechRec) $('feedMic').style.display='none'; else $('feedMic').onclick=startDictation;
+    $('pdfObj').onclick = ()=> printReport(o);
+    if($('shareObj')) $('shareObj').onclick = ()=> shareObject(o);
+    if($('docsSection')) loadDocs(id);
+    $('editObj').onclick = ()=> objectForm(o);
+    if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
+    if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
+    $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
+    // согласование: показать/скрыть запись для клиента (только canManage)
+    $('pBody').querySelectorAll('.fvis-btn').forEach(b=> b.onclick=async()=>{
+      const { error } = await sb.from('feed_entries').update({ client_state:b.dataset.to }).eq('id',b.dataset.fid);
+      if(error){ toast('Не получилось сохранить: '+error.message); return; }
+      toast(b.dataset.to==='approved'?'Клиент увидит эту запись':'Скрыто от клиента');
+      await reload();
+    });
+    // восстановить недописанный отчёт после перерисовки
+    if(prevForm && (prevForm.text||prevForm.status||prevForm.files.length)){
+      $('feedText').value=prevForm.text;
+      if(prevForm.status){ const c=[...$('feedStatusChips').querySelectorAll('.status-chip')].find(x=>x.dataset.status===prevForm.status); if(c) c.click(); }
+      if(prevForm.files.length){ const dt=new DataTransfer(); prevForm.files.forEach(f=>dt.items.add(f)); $('feedPhotos').files=dt.files; $('feedPhotos').onchange(); }
+    }
+  }
+  $('pClose').onclick = ()=>{ $('panel').classList.remove('open'); selectedId=null; renderSidebar(); };
+
+  // ───────────────────────── Лента: добавить запись ─────────────────────────
+  function clearFeedForm(){ // явный сброс: renderPanel теперь сохраняет ввод, сам он не очистится
+    if(!$('feedText')) return;
+    $('feedText').value='';
+    if($('feedPhotos')){ $('feedPhotos').value=''; $('feedThumbs').innerHTML=''; }
+    $('feedStatusChips').querySelectorAll('.status-chip').forEach(x=>{ x.classList.remove('active'); x.style.background=''; x.style.color=''; });
+  }
+  async function addEntry(objectId){
+    const body=$('feedText').value.trim();
+    const chip=$('feedStatusChips').querySelector('.status-chip.active');
+    const status = chip ? chip.dataset.status : '';
+    const files=[...$('feedPhotos').files];
+    if(!body && !files.length){ toast('Добавь фото или комментарий'); return; }
+    if(status && REQUIRE_PHOTO.includes(status) && !files.length){ toast('Для статуса «'+status+'» нужно фото'); return; }
+    if(!navigator.onLine){ await queueReport(objectId, body, status, files); return; }
+    $('feedAdd').disabled=true; $('feedAdd').textContent='Отправка…';
+    try{
+      const photos=[];
+      for(const f of files){ const u=await uploadPhoto(f,`feed/${objectId}`); if(u) photos.push(u); }
+      const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos });
+      if(error){ toast('Ошибка: '+error.message); $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт'; return; }
+      if(status) await sb.from('objects').update({ status }).eq('id',objectId);
+      toast('Отчёт добавлен'); clearFeedForm(); await reload();
+    }catch(e){
+      await queueReport(objectId, body, status, files);
+      $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт';
+    }
+  }
+
+  // ───────────────────────── Офлайн-очередь отчётов (IndexedDB) ─────────────────────────
+  const IDB_STORE='pending';
+  function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('kampika',1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE,{keyPath:'id',autoIncrement:true}); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+  function idbTx(mode, fn){ return idb().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,mode); const rq=fn(tx.objectStore(IDB_STORE)); tx.oncomplete=()=>res(rq&&rq.result); tx.onerror=()=>rej(tx.error); })); }
+  const idbAdd = rec => idbTx('readwrite', st=>st.add(rec));
+  const idbAll = ()  => idbTx('readonly',  st=>st.getAll());
+  const idbDel = id  => idbTx('readwrite', st=>st.delete(id));
+
+  async function updatePending(){
+    const n=((await idbAll())||[]).length, el=$('pending');
+    if(n>0){ el.textContent=`⏳ ${n} в очереди — дошлю при связи`; el.style.display='block'; }
+    else el.style.display='none';
+  }
+  async function queueReport(objectId, body, status, files){
+    await idbAdd({ objectId, body, status:status||null, files:[...files], created_at:new Date().toISOString() });
+    await updatePending();
+    toast('Нет связи — отчёт в очереди, отправлю автоматически');
+    if(selectedId===objectId){ clearFeedForm(); renderPanel(objectId); }
+  }
+  let flushing=false;
+  async function flushQueue(){
+    if(flushing || !navigator.onLine) return; flushing=true; let sent=0;
+    try{
+      for(const it of ((await idbAll())||[])){
+        try{
+          const photos=[];
+          for(const f of (it.files||[])){ const u=await uploadPhoto(f,`feed/${it.objectId}`); if(u) photos.push(u); }
+          const { error } = await sb.from('feed_entries').insert({ object_id:it.objectId, body:it.body, status:it.status, photos });
+          if(error) continue;
+          if(it.status) await sb.from('objects').update({ status:it.status }).eq('id',it.objectId);
+          await idbDel(it.id); sent++;
+        }catch(e){ /* нет связи — оставить в очереди */ }
+      }
+    } finally { flushing=false; }
+    await updatePending();
+    if(sent){ toast(`Дослано из очереди: ${sent}`); await reload(); }
+  }
+  window.addEventListener('online', flushQueue);
+  // вернулся в приложение → тихо обновить данные (вместо realtime)
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && currentUser){ reload(); flushQueue(); } });
+
+  // ───────────────────────── Объект: создать / редактировать ─────────────────────────
+  function objectForm(o, prefill){ // o=null → создание (координаты из карты или геокодера)
+    const editing=!!o;
+    openModal(`
+      <h3>${editing?'Редактировать объект':'Новый объект'}</h3>
+      <div class="field"><label>Название</label><input id="fName" value="${editing?esc(o.name):''}"></div>
+      <div class="field"><label>Статус</label><select id="fStatus">${STATUSES.map(s=>`<option ${editing&&o.status===s.label?'selected':''}>${s.label}</option>`).join('')}</select></div>
+      ${isSuper?`<div class="field"><label>Компания</label><select id="fCompany">${COMPANIES.map(c=>`<option value="${c.id}" ${(editing?o.company===c.id:companyFilter===c.id)?'selected':''}>${c.label}</option>`).join('')}</select></div>`:''}
+      <div class="field"><label>Адрес (необязательно)</label><input id="fAddr" value="${editing?esc(o.address||''):esc(prefill&&prefill.address||'')}"></div>
+      <div class="field"><label>Ответственный</label><input id="fManager" value="${editing?esc(o.manager||''):''}"></div>
+      <div class="field"><label>Телефон</label><input id="fPhone" type="tel" value="${editing?esc(o.phone||''):''}"></div>
+      <div class="field"><label>Плановый срок</label><input id="fDue" type="date" value="${editing?esc(o.due_date||''):''}"></div>
+      <div class="field"><label>Обложка ${editing?'(заменить)':''}</label><input type="file" id="fCover" accept="image/*"></div>
+      <div class="mactions">
+        <button class="btn ghost" id="fCancel">Отмена</button>
+        <button class="btn" id="fSave">${editing?'Сохранить':'Создать'}</button>
+      </div>
+    `);
+    $('fCancel').onclick=closeModal;
+    $('fSave').onclick=async()=>{
+      const name=$('fName').value.trim(); if(!name){ toast('Нужно название'); return; }
+      $('fSave').disabled=true; $('fSave').textContent='…';
+      let cover_url=editing?o.cover_url:null;
+      const cf=$('fCover').files[0];
+      if(cf){ const u=await uploadPhoto(cf,'covers'); if(u) cover_url=u; }
+      const company = $('fCompany') ? $('fCompany').value : (editing ? o.company : myCompany);
+      const payload={ name, status:$('fStatus').value, address:$('fAddr').value.trim()||null,
+        manager:$('fManager').value.trim()||null, phone:$('fPhone').value.trim()||null,
+        due_date:$('fDue').value||null, company, cover_url };
+      let error;
+      if(editing){ ({error}=await sb.from('objects').update(payload).eq('id',o.id)); }
+      else { payload.lat=pendingCoords[0]; payload.lon=pendingCoords[1]; payload.created_by=currentUser.id;
+             ({error}=await sb.from('objects').insert(payload)); }
+      if(error){ toast('Ошибка: '+error.message); $('fSave').disabled=false; $('fSave').textContent='Сохранить'; return; }
+      closeModal(); toast(editing?'Сохранено':'Объект создан'); await reload();
+    };
+  }
+
+  async function deleteObject(o){
+    if(!confirm(`Удалить объект «${o.name}» и всю его ленту?`)) return;
+    const { error } = await sb.from('objects').delete().eq('id',o.id);
+    if(error){ toast('Ошибка: '+error.message); return; }
+    $('panel').classList.remove('open'); selectedId=null;
+    toast('Объект удалён'); await reload();
+  }
+
+  // добавление объекта: по адресу (геокодер Яндекса) или точкой на карте
+  let pendingCoords=null;
+  $('addObj').onclick = addObjectModal;
+  function addObjectModal(){
+    if(window.innerWidth<=640) $('sidebar').classList.remove('open');
+    openModal(`
+      <h3>Новый объект</h3>
+      <div class="field" style="margin-bottom:6px"><label>По адресу</label>
+        <input id="addrInput" placeholder="Город, улица, дом" autocomplete="off"></div>
+      <button class="btn" id="addrFind" style="width:100%">Найти</button>
+      <div id="addrResults"></div>
+      <div style="text-align:center;color:var(--muted);font-size:13px;margin:14px 0">— или —</div>
+      <button class="btn ghost" id="pickMap" style="width:100%">Выбрать точку на карте</button>
+      <div class="mactions"><button class="btn ghost" id="addCancel">Отмена</button></div>
+    `);
+    $('addCancel').onclick=closeModal;
+    $('addrInput').onkeydown=e=>{ if(e.key==='Enter') $('addrFind').click(); };
+    $('pickMap').onclick=()=>{ closeModal(); startPick(); };
+    $('addrFind').onclick=geocodeAddress;
+  }
+  // Показываем несколько кандидатов с пометкой точности (дом/улица/город) — пользователь выбирает нужный.
+  async function geocodeAddress(){
+    const addr=$('addrInput').value.trim(); if(!addr){ toast('Введите адрес'); return; }
+    $('addrFind').disabled=true; $('addrFind').textContent='Ищу…';
+    const box=$('addrResults');
+    try{
+      const res=await ymaps.geocode(addr,{results:5});
+      const n=res.geoObjects.getLength();
+      if(!n){ box.innerHTML='<div class="empty" style="text-align:left;padding:8px 0">Ничего не найдено. Уточни адрес или поставь точку на карте.</div>'; }
+      else{
+        let html='<div class="section-title" style="margin:12px 0 4px">Выбери точный адрес</div>';
+        for(let i=0;i<n;i++){
+          const g=res.geoObjects.get(i), c=g.geometry.getCoordinates();
+          const kind=g.properties.get('metaDataProperty.GeocoderMetaData.kind');
+          html+=`<button class="addr-opt" data-lat="${c[0]}" data-lon="${c[1]}" data-line="${esc(g.getAddressLine())}">${esc(g.getAddressLine())}<span class="addr-kind">${kindLabel(kind)}</span></button>`;
+        }
+        box.innerHTML=html;
+        box.querySelectorAll('.addr-opt').forEach(b=> b.onclick=()=>{
+          pendingCoords=[+b.dataset.lat,+b.dataset.lon];
+          if(map){ map.panTo(pendingCoords,{flying:true}); map.setZoom(17); }
+          closeModal(); objectForm(null,{address:b.dataset.line});
+        });
+      }
+    }catch(e){ box.innerHTML='<div class="empty" style="text-align:left;padding:8px 0">Ошибка поиска адреса.</div>'; }
+    $('addrFind').disabled=false; $('addrFind').textContent='Найти';
+  }
+  $('cancelPick').onclick = ()=> stopPick();
+  function startPick(){ pickMode=true; $('pickbar').style.display='flex'; }
+  function stopPick(){ pickMode=false; $('pickbar').style.display='none'; }
+
+  // ───────────────────────── Доступы (только админ) ─────────────────────────
+  async function accessModal(o){
+    openModal(`<h3>Доступ · ${esc(o.name)}</h3>
+      <div class="field"><label>Выдать доступ по почте</label>
+        <input id="accEmail" type="email" placeholder="почта сотрудника"></div>
+      <div class="mactions" style="justify-content:flex-start;margin-top:0">
+        <button class="btn" id="accGrant">Выдать</button></div>
+      <div class="section-title">Есть доступ</div>
+      <div id="accList" class="empty">Загрузка…</div>
+      <div class="mactions"><button class="btn ghost" id="accClose">Закрыть</button></div>`);
+    $('accClose').onclick=closeModal;
+    $('accGrant').onclick=async()=>{
+      const email=$('accEmail').value.trim().toLowerCase(); if(!email) return;
+      const { data:prof } = await sb.from('profiles').select('id').eq('email',email).maybeSingle();
+      if(!prof){ toast('Не найден — сотрудник должен войти хотя бы раз'); return; }
+      const { error } = await sb.from('object_access').insert({ object_id:o.id, user_id:prof.id, role:'viewer' });
+      if(error){ toast(error.message); return; }
+      toast('Доступ выдан'); $('accEmail').value=''; loadAcc(o.id);
+    };
+    loadAcc(o.id);
+  }
+  async function loadAcc(objId){
+    const { data } = await sb.from('object_access').select('user_id, role, profiles(email)').eq('object_id',objId);
+    const box=$('accList'); if(!data||!data.length){ box.className='empty'; box.textContent='Пока ни у кого.'; return; }
+    box.className=''; box.innerHTML=data.map(a=>`
+      <div class="accrow"><span>${esc(a.profiles?.email||a.user_id)} ${a.role==='owner'?'· владелец':''}</span>
+      ${a.role!=='owner'?`<button data-u="${a.user_id}">убрать</button>`:''}</div>`).join('');
+    box.querySelectorAll('button[data-u]').forEach(b=> b.onclick=async()=>{
+      await sb.from('object_access').delete().eq('object_id',objId).eq('user_id',b.dataset.u);
+      toast('Доступ убран'); loadAcc(objId);
+    });
+  }
+
+  // ───────────────────────── Модалка ─────────────────────────
+  function openModal(html){ $('mbox').innerHTML=html; $('modal').classList.add('open'); }
+  function closeModal(){ $('modal').classList.remove('open'); }
+  $('modal').onclick = e=>{ if(e.target.id==='modal') closeModal(); };
+
+  // ───────────────────────── Документы (только админ компании / супер) ─────────────────────────
+  async function loadDocs(objectId){
+    const box=$('docsSection'); if(!box) return;
+    const { data, error } = await sb.from('object_documents').select('*').eq('object_id',objectId).order('created_at',{ascending:false});
+    if(error){ box.innerHTML=`<div class="empty" style="text-align:left">${esc(error.message)}</div>`; return; }
+    box.innerHTML = `<div class="docs-list">${(data||[]).map(d=>`
+      <div class="doc-row"><span class="dn" data-path="${esc(d.path)}">📄 ${esc(d.name)}</span>
+      <button class="drm" data-id="${d.id}">убрать</button></div>`).join('')}</div>
+      <label class="doc-up">+ Загрузить документ<input type="file" id="docFile" hidden></label>`;
+    box.querySelectorAll('.dn').forEach(el=> el.onclick=()=> openDoc(el.dataset.path));
+    box.querySelectorAll('.drm').forEach(b=> b.onclick=()=> deleteDoc(b.dataset.id, objectId));
+    $('docFile').onchange = ()=> uploadDoc($('docFile').files[0], objectId);
+  }
+  async function uploadDoc(file, objectId){
+    if(!file) return; toast('Загрузка…');
+    const safe=file.name.replace(/[^\w.\-]/g,'_'); const path=`obj${objectId}/${Date.now()}-${safe}`;
+    const { error } = await sb.storage.from('docs').upload(path, file);
+    if(error){ toast('Файл: '+error.message); return; }
+    const { error:e2 } = await sb.from('object_documents').insert({ object_id:objectId, name:file.name, path, uploaded_by:currentUser.id });
+    if(e2){ toast('Ошибка: '+e2.message); return; }
+    toast('Документ добавлен'); loadDocs(objectId);
+  }
+  async function openDoc(path){
+    const { data, error } = await sb.storage.from('docs').createSignedUrl(path, 3600);
+    if(error){ toast('Не открыть: '+error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  }
+  async function deleteDoc(id, objectId){
+    if(!confirm('Убрать документ?')) return;
+    await sb.from('object_documents').delete().eq('id',id);
+    toast('Убрано'); loadDocs(objectId);
+  }
+
+  // ───────────────────────── Клиентская ссылка ─────────────────────────
+  async function shareObject(o){
+    let token = o.share_token;
+    if(!token){
+      token = (crypto.randomUUID? crypto.randomUUID() : Math.random().toString(36).slice(2)+Date.now().toString(36)).replace(/-/g,'');
+      const { error } = await sb.from('objects').update({ share_token:token }).eq('id',o.id);
+      if(error){ toast('Ошибка: '+error.message); return; }
+      o.share_token = token;
+    }
+    const url = location.origin + '/share.html?t=' + token;
+    openModal(`<h3>Ссылка для клиента</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Открывается без логина — только этот объект, только просмотр.</p>
+      <div class="field"><input id="shareUrl" value="${esc(url)}" readonly></div>
+      <div class="mactions">
+        <button class="btn danger" id="shareRevoke">Отозвать</button>
+        <button class="btn ghost" id="shareClose">Закрыть</button>
+        <button class="btn" id="shareCopy">Копировать</button>
+      </div>`);
+    $('shareClose').onclick=closeModal;
+    $('shareCopy').onclick=()=>{ navigator.clipboard?.writeText(url); $('shareUrl').select(); toast('Скопировано'); };
+    $('shareRevoke').onclick=async()=>{
+      await sb.from('objects').update({ share_token:null }).eq('id',o.id);
+      o.share_token=null; toast('Ссылка отозвана'); closeModal();
+    };
+  }
+
+  // ───────────────────────── Экран контента (банк кадров) ─────────────────────────
+  async function renderContent(){
+    const box=$('content');
+    const { data, error } = await sb.from('content_photos').select('*, objects(name, company)').order('created_at',{ascending:false});
+    if(error){ box.innerHTML=`<div class="empty">${esc(error.message)}</div>`; return; }
+    const items=(data||[]).filter(c=> !companyFilter || c.objects?.company===companyFilter);
+    if(!items.length){ box.innerHTML='<div class="empty">Банк контента пуст. Отмечай удачные кадры «★ В контент» в лайтбоксе.</div>'; return; }
+    box.innerHTML = `<div class="act-head">Банк кадров для соцсетей — ${items.length}</div>
+      <div class="content-grid">${items.map(c=>`
+        <div class="content-cell">
+          <button class="cc-rm" data-id="${c.id}">✕</button>
+          <img src="${esc(c.url)}" data-full="${esc(c.url)}">
+          <div class="cc-obj">${esc(c.objects?.name||'')}</div>
+        </div>`).join('')}</div>`;
+    box.querySelectorAll('.content-cell img').forEach(img=> img.onclick=()=> openLightbox(img.dataset.full));
+    box.querySelectorAll('.cc-rm').forEach(b=> b.onclick=async()=>{ await sb.from('content_photos').delete().eq('id',b.dataset.id); toast('Убрано из контента'); renderContent(); });
+  }
+
+  // ───────────────────────── Экран активности ─────────────────────────
+  function renderActivity(){
+    const items=[];
+    objects.filter(inCompany).forEach(o=>(o.feed_entries||[]).forEach(f=> items.push({o,f})));
+    items.sort((a,b)=> new Date(b.f.created_at)-new Date(a.f.created_at));
+    const box=$('activity');
+    if(!items.length){ box.innerHTML='<div class="empty">Пока нет ни одного отчёта.</div>'; return; }
+    box.innerHTML = '<div class="act-head">Что обновилось — свежее сверху</div>' + items.map(({o,f})=>{
+      const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
+      return `<div class="act-item" data-id="${o.id}">
+        <img src="${thumb}">
+        <div>
+          <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
+          ${f.body?`<div class="ai-body">${esc(f.body)}</div>`:''}
+          <div class="ai-time">${relDate(f.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ setView('map'); selectObject(+el.dataset.id); });
+  }
+  function setView(v){
+    $('activity').style.display = v==='activity'?'block':'none';
+    $('content').style.display = v==='content'?'block':'none';
+    $('tabMap').classList.toggle('active', v==='map');
+    $('tabAct').classList.toggle('active', v==='activity');
+    $('tabContent').classList.toggle('active', v==='content');
+    if(v==='activity') renderActivity();
+    else if(v==='content') renderContent();
+    else if(map && map.container) map.container.fitToViewport();
+  }
+  $('tabMap').onclick = ()=> setView('map');
+  $('tabAct').onclick = ()=> setView('activity');
+  $('tabContent').onclick = ()=> setView('content');
+
+  // ───────────────────────── Админ-панель (только супер-админ) ─────────────────────────
+  function openAdmin(){ $('admin').style.display='block'; renderAdmin(); }
+  function closeAdmin(){ $('admin').style.display='none'; }
+  $('adminBtn').onclick = openAdmin;
+
+  function adminSummary(){
+    const cards = COMPANIES.map(c=>{
+      const objs = objects.filter(o=>o.company===c.id);
+      const byStatus = STATUSES.map(s=>({s,n:objs.filter(o=>o.status===s.label).length})).filter(x=>x.n);
+      const overdue = objs.filter(o=>dueOverdue(o.due_date) && o.status!=='Завершён').length;
+      return `<div class="card-co">
+        <h3>${c.label}</h3>
+        <div class="big-num">${objs.length}</div><div class="sub">объектов</div>
+        <div class="mini">${byStatus.map(x=>`<span class="badge" style="background:${x.s.color}">${esc(x.s.label)} ${x.n}</span>`).join('')||'<span class="sub">нет объектов</span>'}</div>
+        ${overdue?`<div class="od">⚠ просрочено: ${overdue}</div>`:''}
+      </div>`;
+    }).join('');
+    const weekAgo = Date.now()-7*86400000;
+    const reports7 = objects.reduce((n,o)=>n+(o.feed_entries||[]).filter(f=>new Date(f.created_at).getTime()>weekAgo).length,0);
+    return `<div class="cards">${cards}</div>
+      <div class="adm-sec">За неделю</div>
+      <div class="card-co"><div class="big-num">${reports7}</div><div class="sub">отчётов с объектов за 7 дней</div></div>`;
+  }
+
+  function renderAdmin(){
+    $('admin').innerHTML = `<div class="adm-wrap">
+      <div class="adm-top"><h2>Админ-панель</h2><button class="adm-close" id="admClose">✕</button></div>
+      <div class="adm-sec">Сводка</div>
+      ${adminSummary()}
+      <div class="adm-sec">Команда</div>
+      <div id="teamBox" class="team"><div class="team-row">Загрузка…</div></div>
+    </div>`;
+    $('admClose').onclick = closeAdmin;
+    loadTeam();
+  }
+
+  async function loadTeam(){
+    const { data, error } = await sb.from('allowed_emails').select('*').order('added_at');
+    const box=$('teamBox');
+    if(error){ box.innerHTML=`<div class="team-row">Ошибка: ${esc(error.message)}</div>`; return; }
+    const rows=(data||[]).map(p=>{
+      const self = p.email===currentUser.email;
+      const comp = p.company||'';
+      return `<div class="team-row" data-email="${esc(p.email)}">
+        <span class="em">${esc(p.email)}${p.note?` · <span style="color:var(--muted)">${esc(p.note)}</span>`:''}</span>
+        <select class="t-comp" ${self?'disabled':''}>
+          <option value="kampika" ${comp==='kampika'?'selected':''}>Kampika</option>
+          <option value="zelege" ${comp==='zelege'?'selected':''}>Zelege</option>
+          <option value="" ${comp===''?'selected':''}>Обе</option>
+        </select>
+        <select class="t-role" ${self?'disabled':''}>
+          <option value="staff" ${!p.is_admin?'selected':''}>Сотрудник</option>
+          <option value="admin" ${p.is_admin?'selected':''}>Админ</option>
+        </select>
+        ${self?'<span class="sub" style="color:var(--muted);font-size:12px">это вы</span>':'<button class="rm">убрать</button>'}
+      </div>`;
+    }).join('');
+    box.innerHTML = rows + `<div class="team-add">
+      <input id="newEmail" type="email" placeholder="почта нового сотрудника" autocomplete="off">
+      <select id="newComp"><option value="kampika">Kampika</option><option value="zelege">Zelege</option><option value="">Обе</option></select>
+      <select id="newRole"><option value="staff">Сотрудник</option><option value="admin">Админ</option></select>
+      <button class="btn" id="addPersonBtn">Добавить</button>
+    </div>`;
+    box.querySelectorAll('.team-row').forEach(row=>{
+      const email=row.dataset.email;
+      const comp=row.querySelector('.t-comp'), role=row.querySelector('.t-role'), rm=row.querySelector('.rm');
+      if(comp) comp.onchange=()=> savePerson(email, comp.value, role.value==='admin');
+      if(role) role.onchange=()=> savePerson(email, comp.value, role.value==='admin');
+      if(rm) rm.onclick=()=> removePerson(email);
+    });
+    $('addPersonBtn').onclick=()=>{
+      const email=$('newEmail').value.trim().toLowerCase();
+      if(!email){ toast('Введите почту'); return; }
+      savePerson(email, $('newComp').value, $('newRole').value==='admin', true);
+    };
+  }
+
+  async function savePerson(email, comp, adminFlag, isNew){
+    if(comp==='') adminFlag=true;            // обе компании = супер-админ
+    const company = comp||null;
+    const { error } = await sb.from('allowed_emails').upsert({ email, company, is_admin:adminFlag }, { onConflict:'email' });
+    if(error){ toast(error.message); return; }
+    await sb.from('profiles').update({ company, is_admin:adminFlag }).eq('email', email); // применить, если уже заходил
+    toast(isNew?'Добавлен':'Сохранено');
+    loadTeam();
+  }
+
+  async function removePerson(email){
+    if(email===currentUser.email){ toast('Нельзя убрать себя'); return; }
+    if(!confirm('Убрать '+email+' из доступа? Он перестанет видеть объекты.')) return;
+    const { data:prof } = await sb.from('profiles').select('id').eq('email',email).maybeSingle();
+    if(prof){
+      await sb.from('object_access').delete().eq('user_id', prof.id);
+      await sb.from('profiles').update({ is_admin:false, company:null }).eq('id', prof.id);
+    }
+    await sb.from('allowed_emails').delete().eq('email', email);
+    toast('Убран'); loadTeam();
+  }
+
+  // ───────────────────────── Поиск / меню ─────────────────────────
+  $('search').oninput = e=>{ searchText=e.target.value.trim().toLowerCase(); renderSidebar(); };
+  $('sort').onchange = e=>{ sortBy=e.target.value; renderSidebar(); };
+  $('company').onchange = e=>{
+    companyFilter = e.target.value||null;
+    renderFilters(); renderMarkers(); renderSidebar();
+    if($('activity').style.display==='block') renderActivity();
+    if($('content').style.display==='block') renderContent();
+  };
+  $('hmenu').onclick = ()=> $('sidebar').classList.toggle('open');
+
+  // меню аккаунта (⋯) — открыть/закрыть + закрытие по клику вне и по выбору пункта
+  $('acctBtn').onclick = e=>{ e.stopPropagation(); $('acctMenu').classList.toggle('open'); };
+  document.addEventListener('click', e=>{ if(!e.target.closest('.acct')) $('acctMenu').classList.remove('open'); });
+  ['adminBtn','pwBtn','logout'].forEach(id=> $(id).addEventListener('click', ()=> $('acctMenu').classList.remove('open')));
+
+  // ───────────────────────── Уведомления (новые отчёты с прошлого визита) ─────────────────────────
+  let lastSeen=null;
+  const seenKey = ()=> 'kampika_seen_'+(currentUser?currentUser.email:'');
+  function newReports(){
+    const since = lastSeen ? new Date(lastSeen).getTime() : Date.now();
+    const items=[];
+    objects.forEach(o=>(o.feed_entries||[]).forEach(f=>{ if(new Date(f.created_at).getTime()>since) items.push({o,f}); }));
+    items.sort((a,b)=> new Date(b.f.created_at)-new Date(a.f.created_at));
+    return items;
+  }
+  function updateBell(){
+    const n=newReports().length, b=$('bellBadge');
+    if(n>0){ b.textContent=n>9?'9+':n; b.style.display='flex'; } else b.style.display='none';
+  }
+  function openBell(){
+    const list=$('bellList'), items=newReports();
+    list.innerHTML = '<div class="bl-head">Новые отчёты</div>' + (items.length ? items.map(({o,f})=>{
+      const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
+      return `<div class="act-item" data-id="${o.id}"><img src="${thumb}"><div>
+        <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
+        ${f.body?`<div class="ai-body">${esc(f.body)}</div>`:''}
+        <div class="ai-time">${relDate(f.created_at)}</div></div></div>`;
+    }).join('') : '<div class="empty">Новых отчётов нет.</div>');
+    list.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ list.classList.remove('open'); setView('map'); selectObject(+el.dataset.id); });
+    list.classList.add('open');
+    lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); updateBell();
+  }
+  $('bell').onclick = ()=>{ const l=$('bellList'); l.classList.contains('open') ? l.classList.remove('open') : openBell(); };
+  document.addEventListener('click', e=>{ if(!e.target.closest('#bell') && !e.target.closest('#bellList')) $('bellList').classList.remove('open'); });
+
+  $('myloc').onclick = ()=>{
+    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
+    navigator.geolocation.getCurrentPosition(
+      p=> map.panTo([p.coords.latitude,p.coords.longitude],{flying:true}),
+      ()=> toast('Не удалось определить местоположение'));
+  };
+
+  // ───────────────────────── Инициализация карты + входа ─────────────────────────
+  async function boot(){
+    $('auth').style.display='none'; $('app').style.display='flex';
+    const { data:{ user } } = await sb.auth.getUser();
+    currentUser=user; $('whoEmail').textContent=user.email;
+    lastSeen = localStorage.getItem(seenKey());
+    if(!lastSeen){ lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); }
+    const { data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+    isAdmin = !!(prof && prof.is_admin);
+    myCompany = prof ? prof.company : null;
+    isSuper = isAdmin && !myCompany;
+    $('adminTag').style.display = isAdmin?'inline-block':'none';
+    if(isSuper){ $('company').style.display='block'; $('adminBtn').style.display='inline-block'; }
+    if(isAdmin) $('tabContent').style.display='';
+    renderFilters();
+    await new Promise(r=> ymaps.ready(r));
+    map = new ymaps.Map('map',{ center:[55.749,37.343], zoom:11, controls:['zoomControl'] });
+    clusterer = new ymaps.Clusterer({ groupByCoordinates:false, clusterDisableClickZoom:false });
+    map.geoObjects.add(clusterer);
+    map.events.add('click', e=>{
+      if(!pickMode) return;
+      pendingCoords = e.get('coords');
+      stopPick();
+      objectForm(null);
+    });
+    await reload();
+    if(objects.length){ map.setBounds(clusterer.getBounds()||map.getBounds(),{checkZoomRange:true,zoomMargin:50}); }
+    // диплинк из уведомления менеджеру: ?obj=ID → сразу открыть объект
+    const qObj = new URLSearchParams(location.search).get('obj');
+    if(qObj && objects.find(o=>o.id===+qObj)) selectObject(+qObj);
+    await updatePending(); flushQueue();
+  }
+
+  $('login').onclick = async ()=>{
+    const email=$('email').value.trim(), password=$('password').value;
+    if(!email||!password){ $('msg').textContent='Введите почту и пароль'; return; }
+    $('msg').textContent='Вход…'; $('login').disabled=true;
+    try{
+      // гонка с таймаутом — чтобы «Вход…» не висел вечно, если сеть/лок подвисли
+      const race = await Promise.race([
+        sb.auth.signInWithPassword({ email, password }),
+        new Promise((_,rej)=> setTimeout(()=>rej(new Error('timeout')), 20000))
+      ]);
+      if(race.error) $('msg').textContent = /Invalid login/i.test(race.error.message)?'Неверная почта или пароль':'Ошибка: '+race.error.message;
+      // успех → onAuthStateChange вызовет boot
+    }catch(e){
+      $('msg').textContent = e.message==='timeout' ? 'Долго нет ответа — проверь связь и попробуй ещё' : 'Сеть недоступна, попробуй ещё раз';
+    }
+    $('login').disabled=false;
+  };
+  $('signup').onclick = async ()=>{
+    const email=$('email').value.trim(), password=$('password').value;
+    if(!email||password.length<6){ $('msg').textContent='Почта и пароль (от 6 символов)'; return; }
+    $('msg').textContent='Создаём аккаунт…';
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if(error){ $('msg').textContent = /already registered/i.test(error.message)?'Аккаунт уже есть — нажмите «Войти»':'Ошибка: '+error.message; return; }
+    if(!data.session) $('msg').textContent='Аккаунт создан. Подтвердите почту по ссылке, затем войдите.';
+    // если подтверждение почты выключено → session есть → onAuthStateChange → boot
+  };
+  $('maglink').onclick = async ()=>{
+    const email=$('email').value.trim(); if(!email){ $('msg').textContent='Введите почту'; return; }
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href } });
+    $('msg').textContent = error ? 'Ошибка: '+error.message : 'Ссылка отправлена на почту.';
+  };
+  $('password').onkeydown = e=>{ if(e.key==='Enter') $('login').click(); };
+  $('email').onkeydown = e=>{ if(e.key==='Enter') $('password').focus(); };
+
+  // Задать/сменить пароль (для уже вошедших — Иван ставит пароль один раз)
+  function setPasswordModal(){
+    openModal(`<h3>Пароль для входа</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Задай пароль — дальше входишь почтой и паролём, без письма.</p>
+      <div class="field"><label>Новый пароль (от 6 символов)</label><input id="pwNew" type="password" autocomplete="new-password"></div>
+      <div class="mactions"><button class="btn ghost" id="pwCancel">Отмена</button><button class="btn" id="pwSave">Сохранить</button></div>`);
+    $('pwCancel').onclick=closeModal;
+    $('pwSave').onclick=async()=>{
+      const p=$('pwNew').value; if(p.length<6){ toast('Минимум 6 символов'); return; }
+      const { error } = await sb.auth.updateUser({ password:p });
+      if(error){ toast('Ошибка: '+error.message); return; }
+      closeModal(); toast('Пароль сохранён — теперь входи им');
+    };
+  }
+  $('pwBtn').onclick = setPasswordModal;
+  $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+
+  sb.auth.getSession().then(({data})=>{ if(data.session) boot(); });
+  sb.auth.onAuthStateChange((_e,session)=>{ if(session && $('app').style.display==='none') boot(); });
+
+  // PWA
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  </script>
+</body>
+</html>

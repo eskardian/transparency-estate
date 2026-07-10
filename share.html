@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kampika — объект</title>
+  <link rel="icon" href="icon.svg">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="vibe.js" defer></script>
+  <style>
+    :root{ --bg:#f5f3ef; --card:#fff; --ink:#2b2b29; --muted:#8a8782; --line:#e3dfd8; --accent:#6b7257; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); transition:background .4s ease,color .4s ease; }
+    .wrap{ max-width:640px; margin:0 auto; padding:0 16px 48px; }
+    header{ text-align:center; padding:22px 0 10px; font-weight:600; letter-spacing:1px; }
+    .cover{ width:100%; height:220px; object-fit:cover; border-radius:14px; background:#ece8e0; }
+    h1{ font-size:24px; margin:18px 0 6px; }
+    .meta{ color:var(--muted); font-size:14px; margin-bottom:4px; }
+    .badge{ display:inline-block; padding:3px 11px; border-radius:999px; font-size:13px; color:#fff; background:var(--accent); }
+    .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 12px; }
+
+    /* прогресс по этапам */
+    .stages{ display:flex; gap:3px; margin:14px 0 6px; }
+    .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
+    .stages-cap{ font-size:13px; color:var(--muted); }
+
+    /* дайджест «за неделю» */
+    .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
+    .digest .dh{ font-size:15px; font-weight:500; margin-bottom:6px; }
+    .digest .dl{ font-size:14px; color:var(--muted); }
+
+    /* погода (Т7 наполнит фразами через Vibe) */
+    .weather{ font-size:14px; color:var(--muted); margin:6px 0 2px; min-height:0; }
+
+    /* слайдер было/после */
+    .ba{ position:relative; width:100%; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#ece8e0; user-select:none; touch-action:none; }
+    .ba img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .ba .after{ clip-path:inset(0 0 0 50%); }
+    .ba .divider{ position:absolute; top:0; bottom:0; left:50%; width:2px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.4); }
+    .ba .knob{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--ink); }
+    .ba .lbl{ position:absolute; bottom:10px; padding:3px 10px; border-radius:999px; font-size:12px; color:#fff; background:rgba(0,0,0,.5); }
+    .ba .lbl.b{ left:10px; } .ba .lbl.a{ right:10px; }
+
+    .item{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+    .item .d{ color:var(--muted); font-size:12px; margin-bottom:5px; }
+    .item .b{ font-size:15px; white-space:pre-wrap; }
+    .item .ph{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .item .ph img{ width:100%; max-width:280px; border-radius:8px; cursor:pointer; }
+    .state{ text-align:center; color:var(--muted); padding:80px 16px; font-size:15px; }
+
+    /* кнопка менеджеру (Т5) */
+    .mgr{ display:block; text-align:center; text-decoration:none; background:var(--accent); color:#fff; padding:14px; border-radius:12px; font-size:15px; margin:24px 0 8px; }
+
+    footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
+    #lb{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; }
+    #lb.open{ display:flex; } #lb img{ max-width:94vw; max-height:94vh; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <header>KAMPIKA</header>
+  <div class="wrap" id="root"><div class="state">Загрузка…</div></div>
+  <footer></footer>
+  <div id="lb"><img id="lbImg" src="" alt=""></div>
+  <script>
+  const SUPABASE_URL = "https://pqmjulphghojlaijffty.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_yrj4fEkOl0uGoKT1i_NgyQ_vGrbi73Z";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession:false, autoRefreshToken:false, lock:(_n,_t,fn)=>fn() }
+  });
+  const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const token = new URLSearchParams(location.search).get('t');
+
+  // Этапы (совпадают с index.html) — для прогресс-бара.
+  const STATUSES = [
+    { label:'Проектирование', color:'#5b7fa6' }, { label:'Идёт планировка', color:'#d68a3a' },
+    { label:'Стройка', color:'#b4453a' }, { label:'Посадка крупномеров', color:'#6b7257' },
+    { label:'Благоустройство', color:'#8a6ba6' }, { label:'Завершён', color:'#8a8782' },
+  ];
+  // Telegram менеджеров (Т5 — Иван заполнит; 'TODO' → кнопку не показывать).
+  const TG_MANAGER = { kampika:'TODO', zelege:'TODO' };
+
+  function state(msg){ document.getElementById('root').innerHTML = `<div class="state">${esc(msg)}</div>`; }
+
+  function stagesBar(status){
+    const idx = STATUSES.findIndex(s=>s.label===status);
+    const segs = STATUSES.map((s,i)=>`<span class="seg" style="${i<=idx?`background:${s.color};`:''}"></span>`).join('');
+    return `<div class="stages">${segs}</div>
+      <div class="stages-cap">Этап ${idx>=0?idx+1:'—'} из ${STATUSES.length}${idx>=0?` · ${esc(STATUSES[idx].label)}`:''}</div>`;
+  }
+
+  // Дайджест «за неделю» — считается на лету из согласованной ленты (без бэкенда).
+  function weekDigest(feed){
+    const weekAgo = Date.now() - 7*86400000;
+    const recent = feed.filter(f => new Date(f.created_at).getTime() > weekAgo);
+    if(!recent.length) return null;
+    const photos = recent.reduce((n,f)=>n+((f.photos||[]).length),0);
+    const parts = [`${recent.length} ${plural(recent.length,'отчёт','отчёта','отчётов')}`];
+    if(photos) parts.push(`${photos} ${plural(photos,'фото','фото','фото')}`);
+    return parts.join(', ');
+  }
+  function plural(n,one,few,many){
+    const m10=n%10, m100=n%100;
+    if(m10===1&&m100!==11) return one;
+    if(m10>=2&&m10<=4&&(m100<10||m100>=20)) return few;
+    return many;
+  }
+
+  // Слайдер было/после: самое раннее фото vs самое свежее. Native range — тач-дружелюбно.
+  function beforeAfter(feed){
+    const chrono = feed.slice().reverse(); // RPC отдаёт desc → разворачиваем в хронологию
+    const photos = [];
+    chrono.forEach(f => (f.photos||[]).forEach(p => photos.push(p)));
+    if(photos.length < 2) return '';
+    const before = photos[0], after = photos[photos.length-1];
+    return `<div class="sec">Как было и как стало</div>
+      <div class="ba" id="ba">
+        <img class="before" src="${esc(before)}" alt="было">
+        <img class="after" id="baAfter" src="${esc(after)}" alt="стало">
+        <div class="divider" id="baDiv"><div class="knob">⇄</div></div>
+        <span class="lbl b">Было</span><span class="lbl a">Сейчас</span>
+        <input type="range" id="baRange" min="0" max="100" value="50"
+          style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize">
+      </div>`;
+  }
+  function wireBeforeAfter(){
+    const range=document.getElementById('baRange'); if(!range) return;
+    const after=document.getElementById('baAfter'), div=document.getElementById('baDiv');
+    range.oninput = ()=>{ const v=range.value; after.style.clipPath=`inset(0 0 0 ${v}%)`; div.style.left=v+'%'; };
+  }
+
+  (async()=>{
+    if(!token){ state('Ссылка недоступна. Попроси менеджера прислать её заново.'); return; }
+    const { data, error } = await sb.rpc('get_shared_object', { token });
+    if(error){ state('Не получилось загрузить объект — проверь связь и обнови страницу.'); return; }
+    if(!data){ state('Объект не найден. Возможно, ссылку обновили — попроси у менеджера новую.'); return; }
+    const o = data;
+    const feed = o.feed || [];
+    const digest = weekDigest(feed);
+
+    document.getElementById('root').innerHTML = `
+      ${o.cover_url?`<img class="cover" src="${esc(o.cover_url)}">`:''}
+      <h1>${esc(o.name)}</h1>
+      <div class="meta"><span class="badge">${esc(o.status||'—')}</span></div>
+      ${o.address?`<div class="meta">📍 ${esc(o.address)}</div>`:''}
+      <div class="weather" id="weather"></div>
+      ${stagesBar(o.status)}
+      ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
+      ${beforeAfter(feed)}
+      <div class="sec">Ход работ</div>
+      ${feed.length? feed.map(f=>`
+        <div class="item">
+          <div class="d">${f.status?esc(f.status)+' · ':''}${new Date(f.created_at).toLocaleDateString('ru-RU')}</div>
+          ${f.body?`<div class="b">${esc(f.body)}</div>`:''}
+          ${(f.photos||[]).length?`<div class="ph">${f.photos.map(p=>`<img src="${esc(p)}" data-full="${esc(p)}">`).join('')}</div>`:''}
+        </div>`).join('') : '<div class="item">Пока тихо — скоро здесь появятся первые новости с участка.</div>'}
+      ${TG_MANAGER[o.company] && TG_MANAGER[o.company]!=='TODO'
+        ? `<a class="mgr" href="https://t.me/${esc(TG_MANAGER[o.company])}?text=${encodeURIComponent('Здравствуйте! Я по объекту «'+o.name+'»')}">Написать менеджеру</a>`
+        : ''}
+    `;
+    document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
+    document.querySelectorAll('.ph img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
+    wireBeforeAfter();
+
+    // Погода (Т7): фразы наполняет исполнитель; пока WEATHER_PHRASES пуст — блок молча пуст.
+    if(window.Vibe && o.lat && o.lon){
+      Vibe.getWeather(o.lat, o.lon).then(w=>{
+        const p = Vibe.weatherPhrase(w, false);
+        if(p) document.getElementById('weather').textContent = p;
+      }).catch(()=>{});
+    }
+  })();
+  document.getElementById('lb').onclick = ()=> document.getElementById('lb').classList.remove('open');
+  </script>
+</body>
+</html>

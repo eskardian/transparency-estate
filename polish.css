@@ -1,0 +1,172 @@
+/* Kampika map — ПОЛИРОВКА (тёплый премиум-вид Kampika сохранён).
+   Override-слой поверх инлайн-стилей index.html (грузится после <style>).
+   НЕ трогает разметку и JS — только доводит токены и состояния компонентов.
+   Палитра остаётся тёплой (Kampika: спокойные тона, оливковый акцент);
+   слой добавляет дизайн-инженерную доводку: концентричные радиусы, тени вместо
+   жёстких бордеров, фокус-ринги, tabular-nums, контуры фото, отклик на нажатие,
+   зоны нажатия 40×40, аккуратные переходы (без transition:all). */
+
+/* ── Палитра: тёплый нейтральный + оливковый акцент Kampika ─────────────── */
+:root{
+  --bg:#f5f3ef;
+  --card:#ffffff;
+  --ink:#2b2b29;          /* тёплый near-black — текст и primary-кнопки */
+  --muted:#8a8782;
+  --line:#e3dfd8;         /* тёплые тонкие бордеры */
+  --accent:#6b7257;       /* оливковый — ссылки, фокус, выбранное */
+  --shadow:0 1px 2px rgba(43,43,41,.05), 0 6px 20px rgba(43,43,41,.08);
+  /* доп-токены доводки */
+  --hover:#f1efe9;        /* фон ховера строк */
+  --sel:#edefe8;          /* подсветка выбранного (тёплый оливковый tint) */
+  --ring:0 0 0 3px rgba(107,114,87,.22);     /* focus ring оливковый */
+  --img-outline:inset 0 0 0 1px rgba(0,0,0,.08);
+}
+
+/* ── База: сглаживание, переносы, размер текста ────────────────────────── */
+html,body{
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  text-wrap:pretty; font-size:15px; letter-spacing:-0.003em;
+}
+#auth h1, h2, h3{ text-wrap:balance; }
+#auth #password{ margin-top:0; }
+#maglink{ display:inline-block; margin-top:12px; font-size:13px; color:var(--muted); cursor:pointer; text-decoration:underline; }
+#maglink:hover{ color:var(--ink); }
+h2, h3, #panel h2, .adm-top h2, .mbox h3, .card-co h3{ letter-spacing:-0.015em; font-weight:600; }
+
+/* ── Шапка ─────────────────────────────────────────────────────────────── */
+header{ border-bottom:1px solid var(--line); box-shadow:0 1px 0 rgba(43,43,41,.02); }
+header .logo{ font-weight:600; letter-spacing:-0.01em; }
+.admin-tag{ border-radius:7px; font-weight:500; }
+
+/* ── Сегментированный переключатель Карта / Активность / Контент ───────── */
+.viewtabs{ background:#ece8e0; border-radius:10px; padding:3px; }
+.vt{ border-radius:7px; font-weight:500; transition:background .15s ease, color .15s ease; }
+.vt.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(43,43,41,.08), 0 1px 3px rgba(43,43,41,.05); }
+
+/* ── Поля ввода: единый стиль + оливковый фокус-ринг ───────────────────── */
+#search, #sort, #auth input,
+.field input, .field select, .field textarea,
+.addfeed textarea, .addfeed select,
+.team-add input, .team-add select, .team-row select{
+  border:1px solid var(--line); border-radius:10px; background:#fff;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+#search:focus, #sort:focus, #auth input:focus,
+.field input:focus, .field select:focus, .field textarea:focus,
+.addfeed textarea:focus, .addfeed select:focus,
+.team-add input:focus, .team-add select:focus, .team-row select:focus{
+  outline:0; border-color:var(--accent); box-shadow:var(--ring);
+}
+
+/* ── Сайдбар, фильтры, чипы ────────────────────────────────────────────── */
+#sidebar{ border-right:1px solid var(--line); }
+.chip{ border-radius:8px; font-weight:500; transition:background .12s ease, color .12s ease, border-color .12s ease, transform .1s ease; }
+.chip:hover{ border-color:#d8d3c8; }
+.chip.active{ background:var(--ink); color:#fff; }   /* status-чипы JS красит инлайном — это для «Все» */
+.chip:active{ transform:scale(.96); }
+
+/* ── Список объектов ───────────────────────────────────────────────────── */
+.row{ padding:12px 14px; transition:background .12s ease, box-shadow .12s ease; }
+.row:hover{ background:var(--hover); }
+.row.sel{ background:var(--sel); box-shadow:inset 3px 0 0 var(--accent); }
+.row img{ border-radius:10px; background:#ece8e0; box-shadow:var(--img-outline); }
+.row .meta .sub{ font-variant-numeric:tabular-nums; }
+.empty{ font-size:14px; }
+
+/* ── Плавающие кнопки на карте ─────────────────────────────────────────── */
+.mapfab button{ border-radius:12px; box-shadow:var(--shadow); transition:transform .1s ease, box-shadow .15s ease; }
+.mapfab button:hover{ box-shadow:0 2px 4px rgba(43,43,41,.08), 0 8px 24px rgba(43,43,41,.13); }
+.mapfab button:active{ transform:scale(.92); }
+.pickbar{ border-radius:12px; }
+
+/* ── Панель объекта ────────────────────────────────────────────────────── */
+#panel{ box-shadow:-1px 0 0 var(--line), var(--shadow); }
+#panel .cover{ background:#ece8e0; box-shadow:var(--img-outline); }
+#panel .pclose{ background:rgba(43,43,41,.55); backdrop-filter:saturate(140%) blur(4px); transition:transform .1s ease, background .15s ease; }
+#panel .pclose:hover{ background:rgba(43,43,41,.72); }
+#panel .pclose:active{ transform:scale(.92); }
+#panel .pclose:after{ content:''; position:absolute; inset:-3px; }  /* hit area 40×40 */
+.section-title{ letter-spacing:.06em; }
+.stages .seg{ transition:background .2s ease; }
+.routes a{ border-radius:10px; font-weight:500; }
+.feed-item .fdate{ font-variant-numeric:tabular-nums; }
+.feed-item .fphotos img{ border-radius:8px; box-shadow:var(--img-outline); }
+.addfeed{ border-radius:12px; }
+.camera-btn{ border-radius:12px; transition:transform .12s ease, filter .15s ease; }
+.camera-btn:hover{ filter:brightness(1.04); }
+.camera-btn:active{ transform:scale(.97); }
+.feed-thumbs img{ border-radius:8px; box-shadow:var(--img-outline); }
+.status-chip{ border-radius:8px; font-weight:500; transition:background .12s ease, color .12s ease, border-color .12s ease, transform .1s ease; }
+.status-chip:hover{ border-color:#d8d3c8; }
+.status-chip:active{ transform:scale(.96); }
+.qtag{ transition:border-color .12s ease, color .12s ease, transform .1s ease; }
+.qtag:hover{ border-color:#d8d3c8; color:var(--ink); }
+.qtag:active{ transform:scale(.96); }
+
+/* ── Экраны активности и контента ──────────────────────────────────────── */
+.act-item{ transition:background .12s ease; }
+.act-item:hover{ background:var(--hover); }
+.act-item img{ border-radius:10px; background:#ece8e0; box-shadow:var(--img-outline); }
+.act-item .ai-time{ font-variant-numeric:tabular-nums; }
+.content-cell img{ box-shadow:var(--img-outline); transition:transform .12s ease; }
+.content-cell img:hover{ transform:scale(1.01); }
+
+/* ── Документы ─────────────────────────────────────────────────────────── */
+.doc-row{ transition:border-color .12s ease, background .12s ease; }
+.doc-row:hover{ border-color:#d8d3c8; background:var(--hover); }
+.doc-up{ transition:border-color .12s ease, color .12s ease; }
+.doc-up:hover{ border-color:#d8d3c8; color:var(--ink); }
+
+/* ── Админ-панель ──────────────────────────────────────────────────────── */
+.card-co{ border-radius:14px; box-shadow:0 1px 2px rgba(43,43,41,.04); }
+.card-co .big-num{ font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.team{ border-radius:14px; box-shadow:0 1px 2px rgba(43,43,41,.04); }
+.team-add{ background:var(--bg); }
+.adm-close{ position:relative; transition:transform .1s ease, background .15s ease; }
+.adm-close:hover{ background:var(--hover); }
+.adm-close:active{ transform:scale(.92); }
+.adm-close:after{ content:''; position:absolute; inset:-3px; }  /* hit area 40×40 */
+
+/* ── Модалка ───────────────────────────────────────────────────────────── */
+#modal{ background:rgba(43,43,41,.45); backdrop-filter:blur(2px); }
+.mbox{ border-radius:16px; box-shadow:0 8px 16px rgba(43,43,41,.10), 0 24px 60px rgba(43,43,41,.18); }
+
+/* ── Кнопки: primary тёплый near-black, отклик на нажатие ──────────────── */
+.btn{ border-radius:9px; font-weight:500; transition:transform .12s ease, opacity .12s ease, filter .15s ease; }
+.btn:hover:not(:disabled){ filter:brightness(1.08); }
+.btn.ghost:hover:not(:disabled){ filter:none; border-color:#d8d3c8; background:var(--hover); }
+.btn:active:not(:disabled){ transform:scale(.96); }
+.btn:focus-visible{ outline:0; box-shadow:var(--ring); }
+
+/* ── Колокол / лайтбокс-флажок / очередь ───────────────────────────────── */
+#bellList{ border-radius:14px; box-shadow:var(--shadow); }
+.bell-badge{ font-variant-numeric:tabular-nums; }
+.bell{ transition:transform .1s ease; }
+.bell:active{ transform:scale(.9); }
+.lb-flag{ box-shadow:var(--shadow); transition:transform .12s ease, filter .15s ease; }
+.lb-flag:hover{ filter:brightness(1.05); }
+.lb-flag:active{ transform:translateX(-50%) scale(.96); }
+
+/* ── Мобильная доводка: всплывашки и панели во всю ширину, а не узкими колонками ──
+   Базовый @media в index.html прячет только сайдбар; здесь дотягиваем остальное. */
+@media (max-width:640px){
+  /* панель объекта — на весь экран, а не узкий сайд-лист как на ПК */
+  #panel{ width:100%; max-width:100%; box-shadow:none; }
+  #panel .cover{ height:200px; }
+
+  /* модалки — нижний лист во всю ширину вместо центрированной десктопной коробки */
+  #modal{ align-items:flex-end; padding:0; }
+  .mbox{ width:100%; max-width:100%; max-height:88vh;
+    border-radius:16px 16px 0 0;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom)); }
+
+  /* админ-сводка: карточки компаний в один столбец, а не два тесных */
+  #admin .cards{ grid-template-columns:1fr; }
+  .adm-wrap{ padding:18px 14px 48px; }
+
+  /* список уведомлений — почти во всю ширину экрана */
+  #bellList{ left:8px; right:8px; width:auto; max-width:none; }
+
+  /* вкладки чуть компактнее, чтобы шапка не переполнялась */
+  .vt{ padding:6px 11px; }
+}

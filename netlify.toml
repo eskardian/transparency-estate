@@ -1,0 +1,6 @@
+# Netlify-конфиг: статика из корня + functions (уведомления менеджеру).
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
