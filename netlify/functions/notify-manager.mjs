@@ -13,7 +13,8 @@ const APP_URL = 'https://stellular-crostata-c4fb1c.netlify.app';
 
 export default async (req) => {
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
-  if (req.headers.get('x-webhook-secret') !== process.env.WEBHOOK_SECRET)
+  // секрет проверяем только если задан (MVP низкого риска — без него; включить при хардненинге)
+  if (process.env.WEBHOOK_SECRET && req.headers.get('x-webhook-secret') !== process.env.WEBHOOK_SECRET)
     return new Response('forbidden', { status: 403 });
 
   const payload = await req.json().catch(() => ({}));
