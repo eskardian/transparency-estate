@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>Kampika — карта объектов</title>
+  <title>Transparency Estate — карта объектов</title>
   <link rel="icon" href="icon.svg">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
@@ -124,9 +124,20 @@
     #panel .cover{ width:100%; height:160px; object-fit:cover; background:#ece8e0; display:block; }
     #panel .pclose{ position:absolute; top:10px; right:10px; width:34px; height:34px; border-radius:50%; border:0; background:rgba(0,0,0,.5); color:#fff; font-size:18px; }
     #panel .pbody{ flex:1; overflow:auto; padding:16px; }
+    /* Т6. На мобиле панель — шторка снизу (bottom-sheet) со свайпом вниз для закрытия */
+    .phandle{ display:none; }
+    @media (max-width:640px){
+      #panel{ top:auto; left:0; right:0; bottom:0; height:88%; width:100%; max-width:100%;
+              border-radius:16px 16px 0 0; transform:translateY(105%); overflow:hidden; }
+      #panel.open{ transform:none; }
+      #panel .cover{ border-radius:16px 16px 0 0; }
+      .phandle{ display:block; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+                width:36px; height:4px; border-radius:2px; background:rgba(255,255,255,.85); z-index:2; }
+    }
     #panel h2{ font-size:19px; margin:0 0 4px; }
     #panel .pmeta{ font-size:13px; color:var(--muted); margin-bottom:6px; }
     #panel .paddr{ font-size:13px; color:var(--muted); margin-bottom:12px; }
+    #panel .weather{ font-size:13px; color:var(--muted); margin:0 0 12px; }
     .routes{ display:flex; gap:8px; margin:12px 0; }
     .routes a{ flex:1; text-align:center; padding:9px; border-radius:8px; text-decoration:none; font-size:13px; }
     .routes a.ya{ background:var(--ink); color:#fff; }
@@ -229,7 +240,7 @@
   <!-- ВХОД -->
   <div id="auth">
     <div class="card">
-      <h1>KAMPIKA</h1>
+      <h1>Transparency Estate</h1>
       <p>Карта объектов</p>
       <input id="email" type="email" placeholder="Почта" autocomplete="email">
       <input id="password" type="password" placeholder="Пароль" autocomplete="current-password">
@@ -244,7 +255,7 @@
   <div id="app">
     <header>
       <button class="hmenu" id="hmenu">☰</button>
-      <span class="logo">KAMPIKA</span>
+      <span class="logo">Transparency Estate</span>
       <div class="viewtabs">
         <button class="vt active" id="tabMap">Карта</button>
         <button class="vt" id="tabAct">Активность</button>
@@ -297,6 +308,7 @@
       <!-- ПАНЕЛЬ ОБЪЕКТА -->
       <div id="panel">
         <div class="phead">
+          <div class="phandle" id="pHandle"></div>
           <img class="cover" id="pCover" alt="">
           <button class="pclose" id="pClose">✕</button>
         </div>
@@ -383,7 +395,7 @@
   $('lbFlag').onclick = async e=>{
     e.stopPropagation(); if(!lbCurrent) return;
     const { error } = await sb.from('content_photos').upsert({ object_id:lbCurrent.objectId, url:lbCurrent.url, added_by:currentUser.id }, { onConflict:'url' });
-    toast(error ? 'Ошибка: '+error.message : 'Добавлено в контент');
+    toast(error ? 'Не удалось добавить в контент — попробуй ещё раз. ('+error.message+')' : 'Готово, добавили в контент');
   };
 
   // самопроверки чистых функций (видны в консоли при поломке)
@@ -397,14 +409,14 @@
     const safe = file.name.replace(/[^\w.\-]/g,'_');
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safe}`;
     const { error } = await sb.storage.from('photos').upload(path, file);
-    if(error){ toast('Фото: '+error.message); return null; }
+    if(error){ toast('Фото не загрузилось — попробуй ещё раз. ('+error.message+')'); return null; }
     return sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
   }
 
   // ───────────────────────── Загрузка данных ─────────────────────────
   async function reload(){
     const { data, error } = await sb.from('objects').select('*, feed_entries(*)').order('updated_at',{ascending:false});
-    if(error){ toast('Загрузка: '+error.message); return; }
+    if(error){ toast('Не получилось загрузить данные — проверь связь и потяни обновить. ('+error.message+')'); return; }
     objects = data||[];
     renderMarkers(); renderSidebar(); updateBell();
     if($('activity').style.display==='block') renderActivity();
@@ -461,8 +473,8 @@
   }
   function renderSidebar(){
     const list=$('list'); const vis=visibleObjects();
-    if(!objects.length){ list.innerHTML='<div class="empty">Объектов пока нет.<br>Нажмите «Добавить объект».</div>'; return; }
-    if(!vis.length){ list.innerHTML='<div class="empty">Ничего не найдено.</div>'; return; }
+    if(!objects.length){ list.innerHTML='<div class="empty">Пока пусто.<br>Добавь первый объект — и он появится на карте.</div>'; return; }
+    if(!vis.length){ list.innerHTML='<div class="empty">Ничего не нашлось. Попробуй изменить фильтр или поиск.</div>'; return; }
     list.innerHTML = vis.map(o=>`
       <div class="row ${o.id===selectedId?'sel':''}" data-id="${o.id}">
         <img src="${o.cover_url||'icon.svg'}" alt="">
@@ -529,6 +541,7 @@
       ${stagesBar(o.status)}
       ${isSuper?`<div class="paddr">🏢 ${esc(companyLabel(o.company))}</div>`:''}
       ${o.address?`<div class="paddr">📍 ${esc(o.address)}</div>`:''}
+      <div class="weather" id="pWeather"></div>
       ${o.manager?`<div class="paddr">👤 ${esc(o.manager)}${o.phone?` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>`:''}</div>`:''}
       ${o.due_date?`<div class="paddr" style="${dueOverdue(o.due_date)?'color:#b4453a':''}">🗓 срок ${new Date(o.due_date).toLocaleDateString('ru-RU')}${dueOverdue(o.due_date)?' · просрочено':''}</div>`:''}
       <div class="routes">
@@ -569,7 +582,7 @@
           ${canManage(o)&&f.client_state!==undefined?`<div class="fvis ${esc(f.client_state)}">${
             f.client_state==='approved'?'клиент видит':f.client_state==='hidden'?'скрыто от клиента':'ждёт согласования'
           }<button class="fvis-btn" data-fid="${f.id}" data-to="${f.client_state==='approved'?'hidden':'approved'}">${f.client_state==='approved'?'скрыть':'показать клиенту'}</button></div>`:''}
-        </div>`).join('') : '<div class="empty" style="text-align:left;padding:8px 0">Записей пока нет.</div>'}
+        </div>`).join('') : '<div class="empty" style="text-align:left;padding:8px 0">Здесь пока пусто — первый отчёт с объекта появится тут.</div>'}
     `;
     // обработчики
     $('feedAdd').onclick = ()=> addEntry(id);
@@ -590,6 +603,13 @@
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
+    // Т7. Погода — украшение, не функция: грузится молча, ошибка/офлайн ничего не ломает. Фразы STAFF.
+    if(window.Vibe && o.lat && o.lon){
+      Vibe.getWeather(o.lat, o.lon).then(w=>{
+        const p = Vibe.weatherPhrase(w, true), el = $('pWeather');
+        if(p && el && selectedId===id) el.textContent = p;
+      }).catch(()=>{});
+    }
     // согласование: показать/скрыть запись для клиента (только canManage)
     $('pBody').querySelectorAll('.fvis-btn').forEach(b=> b.onclick=async()=>{
       const { error } = await sb.from('feed_entries').update({ client_state:b.dataset.to }).eq('id',b.dataset.fid);
@@ -605,6 +625,26 @@
     }
   }
   $('pClose').onclick = ()=>{ $('panel').classList.remove('open'); selectedId=null; renderSidebar(); };
+  // Т6. Свайп вниз по шапке шторки закрывает панель (только мобильный вьюпорт).
+  (function sheetSwipe(){
+    const panel=$('panel'), head=panel.querySelector('.phead');
+    let startY=null, dy=0, h=0;
+    head.addEventListener('touchstart', e=>{
+      if(window.innerWidth>640) return;
+      startY=e.touches[0].clientY; dy=0; h=panel.offsetHeight; panel.style.transition='none';
+    }, {passive:true});
+    head.addEventListener('touchmove', e=>{
+      if(startY==null) return;
+      dy=Math.max(0, e.touches[0].clientY-startY);   // тянем только вниз
+      panel.style.transform='translateY('+dy+'px)';
+    }, {passive:true});
+    head.addEventListener('touchend', ()=>{
+      if(startY==null) return;
+      panel.style.transition=''; panel.style.transform='';
+      if(dy > h*0.3){ panel.classList.remove('open'); selectedId=null; renderSidebar(); }
+      startY=null;
+    });
+  })();
 
   // ───────────────────────── Лента: добавить запись ─────────────────────────
   function clearFeedForm(){ // явный сброс: renderPanel теперь сохраняет ввод, сам он не очистится
@@ -626,7 +666,7 @@
       const photos=[];
       for(const f of files){ const u=await uploadPhoto(f,`feed/${objectId}`); if(u) photos.push(u); }
       const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos });
-      if(error){ toast('Ошибка: '+error.message); $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт'; return; }
+      if(error){ toast('Отчёт не отправился — попробуй ещё раз. ('+error.message+')'); $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт'; return; }
       if(status) await sb.from('objects').update({ status }).eq('id',objectId);
       toast('Отчёт добавлен'); clearFeedForm(); await reload();
     }catch(e){
@@ -698,7 +738,7 @@
     `);
     $('fCancel').onclick=closeModal;
     $('fSave').onclick=async()=>{
-      const name=$('fName').value.trim(); if(!name){ toast('Нужно название'); return; }
+      const name=$('fName').value.trim(); if(!name){ toast('Впиши название объекта'); return; }
       $('fSave').disabled=true; $('fSave').textContent='…';
       let cover_url=editing?o.cover_url:null;
       const cf=$('fCover').files[0];
@@ -711,15 +751,15 @@
       if(editing){ ({error}=await sb.from('objects').update(payload).eq('id',o.id)); }
       else { payload.lat=pendingCoords[0]; payload.lon=pendingCoords[1]; payload.created_by=currentUser.id;
              ({error}=await sb.from('objects').insert(payload)); }
-      if(error){ toast('Ошибка: '+error.message); $('fSave').disabled=false; $('fSave').textContent='Сохранить'; return; }
+      if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); $('fSave').disabled=false; $('fSave').textContent='Сохранить'; return; }
       closeModal(); toast(editing?'Сохранено':'Объект создан'); await reload();
     };
   }
 
   async function deleteObject(o){
-    if(!confirm(`Удалить объект «${o.name}» и всю его ленту?`)) return;
+    if(!confirm(`Удалить объект «${o.name}»? Вся его история тоже пропадёт — это не отменить.`)) return;
     const { error } = await sb.from('objects').delete().eq('id',o.id);
-    if(error){ toast('Ошибка: '+error.message); return; }
+    if(error){ toast('Не получилось удалить — попробуй ещё раз. ('+error.message+')'); return; }
     $('panel').classList.remove('open'); selectedId=null;
     toast('Объект удалён'); await reload();
   }
@@ -746,7 +786,7 @@
   }
   // Показываем несколько кандидатов с пометкой точности (дом/улица/город) — пользователь выбирает нужный.
   async function geocodeAddress(){
-    const addr=$('addrInput').value.trim(); if(!addr){ toast('Введите адрес'); return; }
+    const addr=$('addrInput').value.trim(); if(!addr){ toast('Впиши адрес'); return; }
     $('addrFind').disabled=true; $('addrFind').textContent='Ищу…';
     const box=$('addrResults');
     try{
@@ -767,7 +807,7 @@
           closeModal(); objectForm(null,{address:b.dataset.line});
         });
       }
-    }catch(e){ box.innerHTML='<div class="empty" style="text-align:left;padding:8px 0">Ошибка поиска адреса.</div>'; }
+    }catch(e){ box.innerHTML='<div class="empty" style="text-align:left;padding:8px 0">Не получилось найти адрес — проверь связь или поставь точку на карте вручную.</div>'; }
     $('addrFind').disabled=false; $('addrFind').textContent='Найти';
   }
   $('cancelPick').onclick = ()=> stopPick();
@@ -790,14 +830,14 @@
       const { data:prof } = await sb.from('profiles').select('id').eq('email',email).maybeSingle();
       if(!prof){ toast('Не найден — сотрудник должен войти хотя бы раз'); return; }
       const { error } = await sb.from('object_access').insert({ object_id:o.id, user_id:prof.id, role:'viewer' });
-      if(error){ toast(error.message); return; }
+      if(error){ toast('Не получилось выдать доступ — попробуй ещё раз. ('+error.message+')'); return; }
       toast('Доступ выдан'); $('accEmail').value=''; loadAcc(o.id);
     };
     loadAcc(o.id);
   }
   async function loadAcc(objId){
     const { data } = await sb.from('object_access').select('user_id, role, profiles(email)').eq('object_id',objId);
-    const box=$('accList'); if(!data||!data.length){ box.className='empty'; box.textContent='Пока ни у кого.'; return; }
+    const box=$('accList'); if(!data||!data.length){ box.className='empty'; box.textContent='Пока доступ ни у кого. Добавь сотрудника по почте выше.'; return; }
     box.className=''; box.innerHTML=data.map(a=>`
       <div class="accrow"><span>${esc(a.profiles?.email||a.user_id)} ${a.role==='owner'?'· владелец':''}</span>
       ${a.role!=='owner'?`<button data-u="${a.user_id}">убрать</button>`:''}</div>`).join('');
@@ -816,7 +856,7 @@
   async function loadDocs(objectId){
     const box=$('docsSection'); if(!box) return;
     const { data, error } = await sb.from('object_documents').select('*').eq('object_id',objectId).order('created_at',{ascending:false});
-    if(error){ box.innerHTML=`<div class="empty" style="text-align:left">${esc(error.message)}</div>`; return; }
+    if(error){ box.innerHTML=`<div class="empty" style="text-align:left">Не получилось загрузить документы — потяни обновить. (${esc(error.message)})</div>`; return; }
     box.innerHTML = `<div class="docs-list">${(data||[]).map(d=>`
       <div class="doc-row"><span class="dn" data-path="${esc(d.path)}">📄 ${esc(d.name)}</span>
       <button class="drm" data-id="${d.id}">убрать</button></div>`).join('')}</div>
@@ -829,18 +869,18 @@
     if(!file) return; toast('Загрузка…');
     const safe=file.name.replace(/[^\w.\-]/g,'_'); const path=`obj${objectId}/${Date.now()}-${safe}`;
     const { error } = await sb.storage.from('docs').upload(path, file);
-    if(error){ toast('Файл: '+error.message); return; }
+    if(error){ toast('Файл не загрузился — попробуй ещё раз. ('+error.message+')'); return; }
     const { error:e2 } = await sb.from('object_documents').insert({ object_id:objectId, name:file.name, path, uploaded_by:currentUser.id });
-    if(e2){ toast('Ошибка: '+e2.message); return; }
+    if(e2){ toast('Не удалось сохранить документ — попробуй ещё раз. ('+e2.message+')'); return; }
     toast('Документ добавлен'); loadDocs(objectId);
   }
   async function openDoc(path){
     const { data, error } = await sb.storage.from('docs').createSignedUrl(path, 3600);
-    if(error){ toast('Не открыть: '+error.message); return; }
+    if(error){ toast('Не получилось открыть файл — попробуй ещё раз. ('+error.message+')'); return; }
     window.open(data.signedUrl, '_blank');
   }
   async function deleteDoc(id, objectId){
-    if(!confirm('Убрать документ?')) return;
+    if(!confirm('Убрать этот документ?')) return;
     await sb.from('object_documents').delete().eq('id',id);
     toast('Убрано'); loadDocs(objectId);
   }
@@ -875,7 +915,7 @@
   async function renderContent(){
     const box=$('content');
     const { data, error } = await sb.from('content_photos').select('*, objects(name, company)').order('created_at',{ascending:false});
-    if(error){ box.innerHTML=`<div class="empty">${esc(error.message)}</div>`; return; }
+    if(error){ box.innerHTML=`<div class="empty">Не получилось загрузить банк контента — потяни обновить. (${esc(error.message)})</div>`; return; }
     const items=(data||[]).filter(c=> !companyFilter || c.objects?.company===companyFilter);
     if(!items.length){ box.innerHTML='<div class="empty">Банк контента пуст. Отмечай удачные кадры «★ В контент» в лайтбоксе.</div>'; return; }
     box.innerHTML = `<div class="act-head">Банк кадров для соцсетей — ${items.length}</div>
@@ -895,7 +935,7 @@
     objects.filter(inCompany).forEach(o=>(o.feed_entries||[]).forEach(f=> items.push({o,f})));
     items.sort((a,b)=> new Date(b.f.created_at)-new Date(a.f.created_at));
     const box=$('activity');
-    if(!items.length){ box.innerHTML='<div class="empty">Пока нет ни одного отчёта.</div>'; return; }
+    if(!items.length){ box.innerHTML='<div class="empty">Пока ни одного отчёта. Как появятся — увидишь здесь.</div>'; return; }
     box.innerHTML = '<div class="act-head">Что обновилось — свежее сверху</div>' + items.map(({o,f})=>{
       const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
       return `<div class="act-item" data-id="${o.id}">
@@ -1004,7 +1044,7 @@
     if(comp==='') adminFlag=true;            // обе компании = супер-админ
     const company = comp||null;
     const { error } = await sb.from('allowed_emails').upsert({ email, company, is_admin:adminFlag }, { onConflict:'email' });
-    if(error){ toast(error.message); return; }
+    if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
     await sb.from('profiles').update({ company, is_admin:adminFlag }).eq('email', email); // применить, если уже заходил
     toast(isNew?'Добавлен':'Сохранено');
     loadTeam();
@@ -1060,7 +1100,7 @@
         <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
         ${f.body?`<div class="ai-body">${esc(f.body)}</div>`:''}
         <div class="ai-time">${relDate(f.created_at)}</div></div></div>`;
-    }).join('') : '<div class="empty">Новых отчётов нет.</div>');
+    }).join('') : '<div class="empty">Новых отчётов пока нет — как появятся, увидишь здесь.</div>');
     list.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ list.classList.remove('open'); setView('map'); selectObject(+el.dataset.id); });
     list.classList.add('open');
     lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); updateBell();
@@ -1110,7 +1150,7 @@
 
   $('login').onclick = async ()=>{
     const email=$('email').value.trim(), password=$('password').value;
-    if(!email||!password){ $('msg').textContent='Введите почту и пароль'; return; }
+    if(!email||!password){ $('msg').textContent='Впиши почту и пароль'; return; }
     $('msg').textContent='Вход…'; $('login').disabled=true;
     try{
       // гонка с таймаутом — чтобы «Вход…» не висел вечно, если сеть/лок подвисли

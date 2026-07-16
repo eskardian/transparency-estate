@@ -22,6 +22,16 @@
   --img-outline:inset 0 0 0 1px rgba(0,0,0,.08);
 }
 
+/* ── Т1. Сезонные палитры ──────────────────────────────────────────────────
+   Vibe.applySeason() ставит на <body> класс season-*. Сдвиги деликатные:
+   меняется в основном --accent (акцент — малая площадь), фон и линии — едва
+   заметно, ради читаемости. Все акценты держат контраст с белым текстом ≥ AA. */
+body{ transition:background-color .4s ease, color .4s ease; }
+body.season-spring{ --accent:#4e7a3e; --bg:#f4f4ef; --line:#e0e2d8; --sel:#eaefe4; }
+body.season-summer{ --accent:#3f6f32; --bg:#f4f5ef; --line:#dee3d6; --sel:#e7eee1; }
+body.season-autumn{ --accent:#7d5f34; --bg:#f6f3ec; --line:#e6ded1; --sel:#efe8db; }
+body.season-winter{ --accent:#4c6152; --bg:#f3f3f1; --line:#dfe0dc; --muted:#86867f; --sel:#e8ece8; }
+
 /* ── База: сглаживание, переносы, размер текста ────────────────────────── */
 html,body{
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;

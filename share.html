@@ -3,12 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kampika — объект</title>
+  <title>Transparency Estate — объект</title>
   <link rel="icon" href="icon.svg">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="vibe.js" defer></script>
   <style>
     :root{ --bg:#f5f3ef; --card:#fff; --ink:#2b2b29; --muted:#8a8782; --line:#e3dfd8; --accent:#6b7257; }
+    /* Т1. Сезонные палитры (класс season-* ставит Vibe.applySeason). Сдвиг деликатный. */
+    body.season-spring{ --accent:#4e7a3e; --bg:#f4f4ef; --line:#e0e2d8; }
+    body.season-summer{ --accent:#3f6f32; --bg:#f4f5ef; --line:#dee3d6; }
+    body.season-autumn{ --accent:#7d5f34; --bg:#f6f3ec; --line:#e6ded1; }
+    body.season-winter{ --accent:#4c6152; --bg:#f3f3f1; --line:#dfe0dc; --muted:#86867f; }
     *{ box-sizing:border-box; }
     body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); transition:background .4s ease,color .4s ease; }
     .wrap{ max-width:640px; margin:0 auto; padding:0 16px 48px; }
@@ -57,7 +62,7 @@
   </style>
 </head>
 <body>
-  <header>KAMPIKA</header>
+  <header>Transparency Estate</header>
   <div class="wrap" id="root"><div class="state">Загрузка…</div></div>
   <footer></footer>
   <div id="lb"><img id="lbImg" src="" alt=""></div>
