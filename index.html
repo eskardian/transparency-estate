@@ -1118,10 +1118,15 @@
   // ───────────────────────── Инициализация карты + входа ─────────────────────────
   async function boot(){
     $('auth').style.display='none'; $('app').style.display='flex';
-    const { data:{ user } } = await sb.auth.getUser();
+    // сессия уже локально (после signIn) — не гоняем getUser() по сети к далёкому Supabase
+    const { data:{ session } } = await sb.auth.getSession();
+    const user = session && session.user;
+    if(!user){ location.reload(); return; }
     currentUser=user; $('whoEmail').textContent=user.email;
     lastSeen = localStorage.getItem(seenKey());
     if(!lastSeen){ lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); }
+    // профиль и готовность карты — параллельно (оба ждут сеть, незачем по очереди)
+    const ymapsReady = new Promise(r=> ymaps.ready(r));
     const { data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
     isAdmin = !!(prof && prof.is_admin);
     myCompany = prof ? prof.company : null;
@@ -1130,7 +1135,7 @@
     if(isSuper){ $('company').style.display='block'; $('adminBtn').style.display='inline-block'; }
     if(isAdmin) $('tabContent').style.display='';
     renderFilters();
-    await new Promise(r=> ymaps.ready(r));
+    await ymapsReady;
     map = new ymaps.Map('map',{ center:[55.749,37.343], zoom:11, controls:['zoomControl'] });
     clusterer = new ymaps.Clusterer({ groupByCoordinates:false, clusterDisableClickZoom:false });
     map.geoObjects.add(clusterer);
