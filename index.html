@@ -1204,8 +1204,11 @@
   $('pwBtn').onclick = setPasswordModal;
   $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
 
-  sb.auth.getSession().then(({data})=>{ if(data.session) boot(); });
-  sb.auth.onAuthStateChange((_e,session)=>{ if(session && $('app').style.display==='none') boot(); });
+  // boot ровно один раз: и при загрузке с сохранённой сессией, и сразу после свежего входа
+  let booted=false;
+  const bootOnce = ()=>{ if(!booted){ booted=true; boot(); } };
+  sb.auth.getSession().then(({data})=>{ if(data.session) bootOnce(); });
+  sb.auth.onAuthStateChange((_e,session)=>{ if(session) bootOnce(); });
 
   // PWA
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
