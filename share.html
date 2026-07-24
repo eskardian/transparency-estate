@@ -53,8 +53,9 @@
     .item .ph img{ width:100%; max-width:280px; border-radius:8px; cursor:pointer; }
     .state{ text-align:center; color:var(--muted); padding:80px 16px; font-size:15px; }
 
-    /* кнопка менеджеру (Т5) */
-    .mgr{ display:block; text-align:center; text-decoration:none; background:var(--accent); color:#fff; padding:14px; border-radius:12px; font-size:15px; margin:24px 0 8px; }
+    /* контактные окна */
+    .mgr{ display:block; text-align:center; text-decoration:none; background:var(--accent); color:#fff; padding:14px; border-radius:12px; font-size:15px; margin:12px 0 0; }
+    .mgr.ghost{ background:transparent; color:var(--accent); border:1px solid var(--line); }
 
     footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
     #lb{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; }
@@ -81,8 +82,19 @@
     { label:'Стройка', color:'#b4453a' }, { label:'Посадка крупномеров', color:'#6b7257' },
     { label:'Благоустройство', color:'#8a6ba6' }, { label:'Завершён', color:'#8a8782' },
   ];
-  // Telegram менеджеров (Т5 — Иван заполнит; 'TODO' → кнопку не показывать).
-  const TG_MANAGER = { kampika:'TODO', zelege:'TODO' };
+  const companyName = c => c==='zelege' ? 'Zelege' : 'Kampika';
+  function tgLink(u, objName){
+    const user = String(u).replace(/^@/,'').replace(/^https?:\/\/t\.me\//,'').replace(/^t\.me\//,'');
+    return 'https://t.me/'+encodeURIComponent(user)+'?text='+encodeURIComponent('Здравствуйте! Я по объекту «'+objName+'»');
+  }
+  // Контактные окна из данных: персональный менеджер объекта (если задан) + поддержка компании (базовое).
+  function contactWindows(o){
+    let html = '';
+    if(o.manager_tg) html += `<a class="mgr" href="${tgLink(o.manager_tg, o.name)}">Написать своему менеджеру</a>`;
+    if(o.support_tg) html += `<a class="mgr ghost" href="${tgLink(o.support_tg, o.name)}">Написать в поддержку ${esc(companyName(o.company))}</a>`;
+    else if(o.support_url) html += `<a class="mgr ghost" href="${esc(o.support_url)}" target="_blank" rel="noopener">Связаться с ${esc(companyName(o.company))}</a>`;
+    return html ? `<div class="sec">Связаться</div>${html}` : '';
+  }
 
   function state(msg){ document.getElementById('root').innerHTML = `<div class="state">${esc(msg)}</div>`; }
 
@@ -158,9 +170,7 @@
           ${f.body?`<div class="b">${esc(f.body)}</div>`:''}
           ${(f.photos||[]).length?`<div class="ph">${f.photos.map(p=>`<img src="${esc(p)}" data-full="${esc(p)}">`).join('')}</div>`:''}
         </div>`).join('') : '<div class="item">Пока тихо — скоро здесь появятся первые новости с участка.</div>'}
-      ${TG_MANAGER[o.company] && TG_MANAGER[o.company]!=='TODO'
-        ? `<a class="mgr" href="https://t.me/${esc(TG_MANAGER[o.company])}?text=${encodeURIComponent('Здравствуйте! Я по объекту «'+o.name+'»')}">Написать менеджеру</a>`
-        : ''}
+      ${contactWindows(o)}
     `;
     document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
     document.querySelectorAll('.ph img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
