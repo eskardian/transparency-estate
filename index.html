@@ -739,6 +739,7 @@
       <div class="field"><label>Адрес (необязательно)</label><input id="fAddr" value="${editing?esc(o.address||''):esc(prefill&&prefill.address||'')}"></div>
       <div class="field"><label>Ответственный</label><input id="fManager" value="${editing?esc(o.manager||''):''}"></div>
       <div class="field"><label>Телефон</label><input id="fPhone" type="tel" value="${editing?esc(o.phone||''):''}"></div>
+      <div class="field"><label>Telegram менеджера <span style="text-transform:none;color:var(--muted);font-weight:400">— клиент увидит кнопку «написать менеджеру»</span></label><input id="fManagerTg" placeholder="@username" value="${editing?esc(o.manager_tg||''):''}"></div>
       <div class="field"><label>Плановый срок</label><input id="fDue" type="date" value="${editing?esc(o.due_date||''):''}"></div>
       <div class="field"><label>Обложка ${editing?'(заменить)':''}</label><input type="file" id="fCover" accept="image/*"></div>
       <div class="mactions">
@@ -756,6 +757,7 @@
       const company = $('fCompany') ? $('fCompany').value : (editing ? o.company : myCompany);
       const payload={ name, status:$('fStatus').value, address:$('fAddr').value.trim()||null,
         manager:$('fManager').value.trim()||null, phone:$('fPhone').value.trim()||null,
+        manager_tg:$('fManagerTg').value.trim().replace(/^@/,'')||null,
         due_date:$('fDue').value||null, company, cover_url };
       let error;
       if(editing){ ({error}=await sb.from('objects').update(payload).eq('id',o.id)); }
@@ -1002,11 +1004,38 @@
       <div class="adm-top"><h2>Админ-панель</h2><button class="adm-close" id="admClose">✕</button></div>
       <div class="adm-sec">Сводка</div>
       ${adminSummary()}
+      <div class="adm-sec">Компании · контакт поддержки для клиентов</div>
+      <div id="companiesBox" class="team"><div class="team-row">Загрузка…</div></div>
       <div class="adm-sec">Команда</div>
       <div id="teamBox" class="team"><div class="team-row">Загрузка…</div></div>
     </div>`;
     $('admClose').onclick = closeAdmin;
-    loadTeam();
+    loadCompanies(); loadTeam();
+  }
+
+  // Раздел «Компании»: правка контакта поддержки. RLS: супер — все, админ компании — свою.
+  async function loadCompanies(){
+    const { data, error } = await sb.from('companies').select('*').order('slug');
+    const box=$('companiesBox'); if(!box) return;
+    if(error){ box.innerHTML=`<div class="team-row">Не загрузились компании — потяни обновить. (${esc(error.message)})</div>`; return; }
+    box.innerHTML = (data||[]).map(c=>`
+      <div class="team-row" data-slug="${esc(c.slug)}" style="align-items:stretch;flex-direction:column;gap:7px">
+        <b>${esc(c.name)}</b>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input class="c-tg" placeholder="@поддержка в Telegram" value="${esc(c.support_tg||'')}" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px">
+          <input class="c-url" placeholder="ссылка на форму/сайт (необяз.)" value="${esc(c.support_url||'')}" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px">
+          <button class="btn c-save">Сохранить</button>
+        </div>
+      </div>`).join('') || '<div class="team-row">Компаний нет.</div>';
+    box.querySelectorAll('.team-row[data-slug]').forEach(row=>{
+      row.querySelector('.c-save').onclick=()=> saveCompany(row.dataset.slug,
+        row.querySelector('.c-tg').value.trim().replace(/^@/,''), row.querySelector('.c-url').value.trim());
+    });
+  }
+  async function saveCompany(slug, tg, url){
+    const { error } = await sb.from('companies').update({ support_tg:tg||null, support_url:url||null }).eq('slug',slug);
+    if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
+    toast('Контакты компании сохранены');
   }
 
   async function loadTeam(){
