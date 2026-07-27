@@ -28,6 +28,7 @@
     .stages{ display:flex; gap:3px; margin:14px 0 6px; }
     .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
     .stages-cap{ font-size:13px; color:var(--muted); }
+    .eta{ font-size:14px; color:var(--ink); margin:8px 0 0; }
 
     /* дайджест «за неделю» */
     .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
@@ -122,6 +123,19 @@
     return many;
   }
 
+  // Веха: плановая дата завершения (клиенту важно «когда закончите»). Тон мягкий.
+  function etaLine(due, status){
+    if(status==='Завершён') return '';
+    const d=new Date(due), today=new Date(new Date().toDateString());
+    const days=Math.round((d-today)/86400000);
+    const date=d.toLocaleDateString('ru-RU');
+    let txt;
+    if(days>0) txt=`Плановое завершение — ${date}, примерно через ${days} ${plural(days,'день','дня','дней')}`;
+    else if(days===0) txt=`Плановое завершение — сегодня, ${date}`;
+    else txt=`Плановое завершение — ${date}. Наводим финальные штрихи.`;
+    return `<div class="eta">🗓 ${esc(txt)}</div>`;
+  }
+
   // Слайдер было/после: самое раннее фото vs самое свежее. Native range — тач-дружелюбно.
   function beforeAfter(feed){
     const chrono = feed.slice().reverse(); // RPC отдаёт desc → разворачиваем в хронологию
@@ -161,6 +175,7 @@
       ${o.address?`<div class="meta">📍 ${esc(o.address)}</div>`:''}
       <div class="weather" id="weather"></div>
       ${stagesBar(o.status)}
+      ${o.due_date ? etaLine(o.due_date, o.status) : ''}
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
       ${beforeAfter(feed)}
       <div class="sec">Ход работ</div>
