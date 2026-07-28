@@ -55,14 +55,13 @@
     /* погода (Т7 наполнит фразами через Vibe) */
     .weather{ font-size:14px; color:var(--muted); margin:6px 0 2px; min-height:0; }
 
-    /* слайдер было/после */
-    .ba{ position:relative; width:100%; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#ece8e0; user-select:none; touch-action:none; }
-    .ba img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .ba .after{ clip-path:inset(0 0 0 50%); }
-    .ba .divider{ position:absolute; top:0; bottom:0; left:50%; width:2px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.4); }
-    .ba .knob{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--ink); }
-    .ba .lbl{ position:absolute; bottom:10px; padding:3px 10px; border-radius:999px; font-size:12px; color:#fff; background:rgba(0,0,0,.5); }
-    .ba .lbl.b{ left:10px; } .ba .lbl.a{ right:10px; }
+    /* таймлапс «как рос участок» */
+    .tl{ position:relative; width:100%; border-radius:14px; overflow:hidden; background:#ece8e0; }
+    .tl img{ display:block; width:100%; aspect-ratio:4/3; object-fit:cover; }
+    .tl-ctl{ display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--card); }
+    .tl-play{ flex:0 0 auto; width:38px; height:38px; border-radius:50%; border:0; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
+    .tl-ctl input[type=range]{ flex:1; accent-color:var(--accent); }
+    .tl-date{ flex:0 0 auto; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:74px; text-align:right; }
 
     .item{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
     .item .d{ color:var(--muted); font-size:12px; margin-bottom:5px; }
@@ -174,27 +173,41 @@
     }).join('');
   }
 
-  // Слайдер было/после: самое раннее фото vs самое свежее. Native range — тач-дружелюбно.
-  function beforeAfter(feed){
-    const chrono = feed.slice().reverse(); // RPC отдаёт desc → разворачиваем в хронологию
-    const photos = [];
-    chrono.forEach(f => (f.photos||[]).forEach(p => photos.push(p)));
-    if(photos.length < 2) return '';
-    const before = photos[0], after = photos[photos.length-1];
-    return `<div class="sec">Как было и как стало</div>
-      <div class="ba" id="ba">
-        <img class="before" src="${esc(before)}" alt="было">
-        <img class="after" id="baAfter" src="${esc(after)}" alt="стало">
-        <div class="divider" id="baDiv"><div class="knob">⇄</div></div>
-        <span class="lbl b">Было</span><span class="lbl a">Сейчас</span>
-        <input type="range" id="baRange" min="0" max="100" value="50"
-          style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize">
+  // Таймлапс «как рос участок»: все фото ленты по хронологии, play + ползунок.
+  function timelapse(feed){
+    const chrono = feed.slice().reverse(); // RPC отдаёт desc → в хронологию
+    const frames = [];
+    chrono.forEach(f => (f.photos||[]).forEach(p => frames.push({url:p, date:f.created_at})));
+    if(frames.length < 2) return '';
+    window.__tlFrames = frames;
+    const last = frames.length-1;
+    return `<div class="sec">Как рос участок</div>
+      <div class="tl">
+        <img id="tlImg" src="${esc(frames[last].url)}" alt="прогресс">
+        <div class="tl-ctl">
+          <button id="tlPlay" class="tl-play" aria-label="Проиграть">▶</button>
+          <input type="range" id="tlRange" min="0" max="${last}" value="${last}">
+          <span id="tlDate" class="tl-date">${new Date(frames[last].date).toLocaleDateString('ru-RU')}</span>
+        </div>
       </div>`;
   }
-  function wireBeforeAfter(){
-    const range=document.getElementById('baRange'); if(!range) return;
-    const after=document.getElementById('baAfter'), div=document.getElementById('baDiv');
-    range.oninput = ()=>{ const v=range.value; after.style.clipPath=`inset(0 0 0 ${v}%)`; div.style.left=v+'%'; };
+  function wireTimelapse(){
+    const frames = window.__tlFrames; if(!frames) return;
+    const img=document.getElementById('tlImg'), range=document.getElementById('tlRange'),
+          dateEl=document.getElementById('tlDate'), play=document.getElementById('tlPlay');
+    if(!range) return;
+    frames.forEach(f=>{ const im=new Image(); im.src=f.url; }); // префетч для плавности
+    const show=i=>{ img.src=frames[i].url; dateEl.textContent=new Date(frames[i].date).toLocaleDateString('ru-RU'); range.value=i; };
+    range.oninput=()=> show(+range.value);
+    let timer=null;
+    const stop=()=>{ if(timer){ clearInterval(timer); timer=null; } play.textContent='▶'; };
+    play.onclick=()=>{
+      if(timer){ stop(); return; }
+      play.textContent='⏸';
+      let i = (+range.value>=frames.length-1) ? 0 : +range.value;
+      show(i);
+      timer=setInterval(()=>{ i++; if(i>=frames.length){ stop(); return; } show(i); }, 750);
+    };
   }
 
   (async()=>{
@@ -218,7 +231,7 @@
       <button class="roadmap-btn" id="roadmapBtn">Показать план работ</button>
       <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
-      ${beforeAfter(feed)}
+      ${timelapse(feed)}
       <div class="sec">Ход работ</div>
       ${feed.length? feed.map(f=>`
         <div class="item">
@@ -230,7 +243,7 @@
     `;
     document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
     document.querySelectorAll('.ph img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
-    wireBeforeAfter();
+    wireTimelapse();
     const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');
     if(rb) rb.onclick=()=>{ const open=rbox.classList.toggle('open'); rb.textContent=open?'Скрыть план работ':'Показать план работ'; };
 
