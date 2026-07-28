@@ -810,6 +810,7 @@
       <div class="field"><label>Telegram менеджера <span style="text-transform:none;color:var(--muted);font-weight:400">— клиент увидит кнопку «написать менеджеру»</span></label><input id="fManagerTg" placeholder="@username" value="${editing?esc(o.manager_tg||''):''}"></div>
       <div class="field"><label>Плановый срок</label><input id="fDue" type="date" value="${editing?esc(o.due_date||''):''}"></div>
       <div class="field"><label>Прямой эфир <span style="text-transform:none;color:var(--muted);font-weight:400">— ссылка на трансляцию (YouTube Live / поток)</span></label><input id="fLive" placeholder="https://youtube.com/live/… или .m3u8" value="${editing?esc(o.live_url||''):''}"></div>
+      <div class="field"><label>Email клиента <span style="text-transform:none;color:var(--muted);font-weight:400">— письмо при новом согласованном обновлении</span></label><input id="fClientEmail" type="email" placeholder="client@mail.ru" value="${editing?esc(o.client_email||''):''}"></div>
       <div class="field"><label>Обложка ${editing?'(заменить)':''}</label><input type="file" id="fCover" accept="image/*"></div>
       <div class="mactions">
         <button class="btn ghost" id="fCancel">Отмена</button>
@@ -828,6 +829,7 @@
         manager:$('fManager').value.trim()||null, phone:$('fPhone').value.trim()||null,
         manager_tg:$('fManagerTg').value.trim().replace(/^@/,'')||null,
         live_url:$('fLive').value.trim()||null,
+        client_email:$('fClientEmail').value.trim()||null,
         due_date:$('fDue').value||null, company, cover_url };
       let error;
       if(editing){ ({error}=await sb.from('objects').update(payload).eq('id',o.id)); }
