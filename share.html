@@ -46,6 +46,19 @@
     .rm-row .rm-date{ color:var(--muted); font-size:13px; }
     .rm-row.done{ color:var(--muted); } .rm-row.done .rm-mark{ color:var(--accent); }
     .rm-row.current{ background:#faf8f4; font-weight:600; } .rm-row.current .rm-mark{ color:var(--accent); }
+    /* прямой эфир — кнопка */
+    .live-open{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; background:#b4453a; color:#fff; border:0; border-radius:10px; padding:12px; font-size:15px; font-family:inherit; margin:14px 0 0; cursor:pointer; }
+    .live-open .lo-dot{ width:9px; height:9px; border-radius:50%; background:#fff; animation:livepulse 1.4s infinite; }
+    @keyframes livepulse{ 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
+    /* прямой эфир — плавающее окно (PiP) */
+    .live-win{ position:fixed; right:14px; bottom:14px; width:300px; max-width:92vw; z-index:80; background:#111; border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.45); flex-direction:column; }
+    .live-head{ display:flex; align-items:center; gap:8px; padding:7px 10px; background:#1c1c1c; color:#fff; cursor:move; user-select:none; }
+    .live-badge{ font-size:10px; font-weight:700; letter-spacing:.5px; color:#fff; background:#b4453a; padding:2px 6px; border-radius:4px; }
+    .live-title{ font-size:13px; } .live-sp{ flex:1; }
+    .live-btn{ background:none; border:0; color:#fff; font-size:14px; cursor:pointer; padding:2px 6px; line-height:1; }
+    .live-body{ position:relative; width:100%; aspect-ratio:16/9; background:#000; }
+    .live-body iframe, .live-body video{ position:absolute; inset:0; width:100%; height:100%; border:0; object-fit:cover; }
+    .live-win.expanded{ left:50%; top:50%; right:auto; bottom:auto; transform:translate(-50%,-50%); width:min(880px,94vw); }
 
     /* дайджест «за неделю» */
     .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
@@ -84,6 +97,16 @@
   <div class="wrap" id="root"><div class="state">Загрузка…</div></div>
   <footer></footer>
   <div id="lb"><img id="lbImg" src="" alt=""></div>
+  <div id="live" class="live-win" style="display:none">
+    <div class="live-head" id="liveHead">
+      <span class="live-badge">LIVE</span>
+      <span class="live-title">Прямой эфир</span>
+      <span class="live-sp"></span>
+      <button class="live-btn" id="liveExpand" title="Развернуть">⤢</button>
+      <button class="live-btn" id="liveClose" title="Закрыть">✕</button>
+    </div>
+    <div class="live-body" id="liveBody"></div>
+  </div>
   <script>
   const SUPABASE_URL = "https://pqmjulphghojlaijffty.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_yrj4fEkOl0uGoKT1i_NgyQ_vGrbi73Z";
@@ -210,12 +233,32 @@
     };
   }
 
+  // Прямой эфир: плеер по типу ссылки. YouTube → iframe; HLS/mp4 → video (iOS/Safari натив;
+  // кроссбраузерный HLS без VPN — путь 2, self-hosted hls.js); иначе — общий эмбед.
+  function liveEmbed(url){
+    const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
+    if(yt) return `<iframe src="https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>`;
+    if(/\.m3u8|\.mp4/i.test(url)) return `<video src="${esc(url)}" autoplay muted playsinline controls></video>`;
+    return `<iframe src="${esc(url)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen frameborder="0"></iframe>`;
+  }
+  function openLive(){
+    const url=window.__liveUrl; if(!url) return;
+    document.getElementById('liveBody').innerHTML = liveEmbed(url);
+    document.getElementById('live').style.display='flex';
+  }
+  function closeLive(){
+    const w=document.getElementById('live');
+    w.style.display='none'; w.classList.remove('expanded');
+    document.getElementById('liveBody').innerHTML=''; // остановить поток
+  }
+
   (async()=>{
     if(!token){ state('Ссылка недоступна. Попроси менеджера прислать её заново.'); return; }
     const { data, error } = await sb.rpc('get_shared_object', { token });
     if(error){ state('Не получилось загрузить объект — проверь связь и обнови страницу.'); return; }
     if(!data){ state('Объект не найден. Возможно, ссылку обновили — попроси у менеджера новую.'); return; }
     const o = data;
+    window.__liveUrl = o.live_url;
     const feed = o.feed || [];
     const digest = weekDigest(feed);
 
@@ -228,6 +271,7 @@
       <div class="weather" id="weather"></div>
       ${stagesBar(o.status)}
       ${etaLine(o)}
+      ${o.live_url ? '<button class="live-open" id="liveOpen"><span class="lo-dot"></span> Прямой эфир с объекта</button>' : ''}
       <button class="roadmap-btn" id="roadmapBtn">Показать план работ</button>
       <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
@@ -246,6 +290,7 @@
     wireTimelapse();
     const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');
     if(rb) rb.onclick=()=>{ const open=rbox.classList.toggle('open'); rb.textContent=open?'Скрыть план работ':'Показать план работ'; };
+    const lo=document.getElementById('liveOpen'); if(lo) lo.onclick=openLive;
 
     // Погода (Т7): фразы наполняет исполнитель; пока WEATHER_PHRASES пуст — блок молча пуст.
     if(window.Vibe && o.lat && o.lon){
@@ -256,6 +301,23 @@
     }
   })();
   document.getElementById('lb').onclick = ()=> document.getElementById('lb').classList.remove('open');
+
+  // Эфир: закрыть / развернуть / перетаскивание окна
+  document.getElementById('liveClose').onclick = closeLive;
+  document.getElementById('liveExpand').onclick = ()=>{ const w=document.getElementById('live'); w.classList.toggle('expanded'); w.style.left=w.style.top=w.style.right=w.style.bottom=''; };
+  (function(){
+    const w=document.getElementById('live'), h=document.getElementById('liveHead');
+    let sx,sy,ox,oy,drag=false;
+    const start=(x,y)=>{ if(w.classList.contains('expanded')) return; drag=true; sx=x; sy=y; const r=w.getBoundingClientRect(); ox=r.left; oy=r.top; w.style.transition='none'; };
+    const move=(x,y)=>{ if(!drag) return; w.style.left=(ox+x-sx)+'px'; w.style.top=(oy+y-sy)+'px'; w.style.right='auto'; w.style.bottom='auto'; };
+    const end=()=>{ drag=false; w.style.transition=''; };
+    h.addEventListener('mousedown',e=>{ if(e.target.tagName==='BUTTON') return; e.preventDefault(); start(e.clientX,e.clientY); });
+    window.addEventListener('mousemove',e=> move(e.clientX,e.clientY));
+    window.addEventListener('mouseup',end);
+    h.addEventListener('touchstart',e=>{ if(e.target.tagName==='BUTTON') return; const t=e.touches[0]; start(t.clientX,t.clientY); },{passive:true});
+    window.addEventListener('touchmove',e=>{ if(!drag) return; e.preventDefault(); const t=e.touches[0]; move(t.clientX,t.clientY); },{passive:false});
+    window.addEventListener('touchend',end);
+  })();
   </script>
 </body>
 </html>
