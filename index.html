@@ -64,6 +64,8 @@
     .doc-row{ display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; }
     .doc-row .dn{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; color:var(--ink); }
     .doc-row .drm{ background:none; border:0; color:#b4453a; font-size:12px; cursor:pointer; }
+    .doc-row .dcv{ background:#fff; border:1px solid var(--line); color:var(--muted); font-size:11px; padding:3px 8px; border-radius:999px; cursor:pointer; white-space:nowrap; }
+    .doc-row .dcv.on{ border-color:var(--accent); color:var(--accent); background:#f2f5ee; }
     .doc-up{ display:inline-block; font-size:13px; padding:8px 12px; border:1px dashed var(--line); border-radius:8px; cursor:pointer; color:var(--muted); }
     /* кандидаты адреса в форме «Новый объект» */
     .addr-opt{ display:block; width:100%; text-align:left; padding:9px 11px; margin-top:6px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:13px; cursor:pointer; }
@@ -957,11 +959,18 @@
     if(error){ box.innerHTML=`<div class="empty" style="text-align:left">Не получилось загрузить документы — потяни обновить. (${esc(error.message)})</div>`; return; }
     box.innerHTML = `<div class="docs-list">${(data||[]).map(d=>`
       <div class="doc-row"><span class="dn" data-path="${esc(d.path)}">📄 ${esc(d.name)}</span>
+      <button class="dcv ${d.client_visible?'on':''}" data-id="${d.id}" data-v="${d.client_visible?1:0}" title="Показывать клиенту в портале">${d.client_visible?'клиенту ✓':'клиенту'}</button>
       <button class="drm" data-id="${d.id}">убрать</button></div>`).join('')}</div>
       <label class="doc-up">+ Загрузить документ<input type="file" id="docFile" hidden></label>`;
     box.querySelectorAll('.dn').forEach(el=> el.onclick=()=> openDoc(el.dataset.path));
+    box.querySelectorAll('.dcv').forEach(b=> b.onclick=()=> toggleDocClient(b.dataset.id, b.dataset.v==='1', objectId));
     box.querySelectorAll('.drm').forEach(b=> b.onclick=()=> deleteDoc(b.dataset.id, objectId));
     $('docFile').onchange = ()=> uploadDoc($('docFile').files[0], objectId);
+  }
+  async function toggleDocClient(id, cur, objectId){
+    const { error } = await sb.from('object_documents').update({ client_visible: !cur }).eq('id', id);
+    if(error){ toast('Не удалось изменить — попробуй ещё раз. ('+error.message+')'); return; }
+    toast(!cur?'Документ виден клиенту':'Скрыт от клиента'); loadDocs(objectId);
   }
   async function uploadDoc(file, objectId){
     if(!file) return; toast('Загрузка…');
