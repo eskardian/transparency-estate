@@ -560,6 +560,7 @@
       </div>
       <div class="pactions">
         <button class="btn ghost" id="editObj">Редактировать</button>
+        ${canManage(o)?'<button class="btn ghost" id="roadmapObj">План работ</button>':''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
@@ -610,6 +611,7 @@
     if($('shareObj')) $('shareObj').onclick = ()=> shareObject(o);
     if($('docsSection')) loadDocs(id);
     $('editObj').onclick = ()=> objectForm(o);
+    if($('roadmapObj')) $('roadmapObj').onclick = ()=> roadmapModal(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -774,6 +776,24 @@
     if(error){ toast('Не получилось удалить — попробуй ещё раз. ('+error.message+')'); return; }
     $('panel').classList.remove('open'); selectedId=null;
     toast('Объект удалён'); await reload();
+  }
+
+  // План работ: плановые даты по этапам (клиент увидит роадмэп в портале)
+  function roadmapModal(o){
+    const sd = o.stage_dates||{};
+    openModal(`<h3>План работ · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Плановые даты по этапам — клиент увидит их в дорожной карте. Пустые не показываются.</p>
+      ${STATUSES.map(s=>`<div class="field"><label>${esc(s.label)}</label>
+        <input type="date" data-stage="${esc(s.label)}" value="${esc(sd[s.label]||'')}"></div>`).join('')}
+      <div class="mactions"><button class="btn ghost" id="rmCancel">Отмена</button><button class="btn" id="rmSave">Сохранить</button></div>`);
+    $('rmCancel').onclick=closeModal;
+    $('rmSave').onclick=async()=>{
+      const dates={};
+      $('mbox').querySelectorAll('input[data-stage]').forEach(i=>{ if(i.value) dates[i.dataset.stage]=i.value; });
+      const { error } = await sb.from('objects').update({ stage_dates:dates }).eq('id',o.id);
+      if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
+      o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
+    };
   }
 
   // добавление объекта: по адресу (геокодер Яндекса) или точкой на карте

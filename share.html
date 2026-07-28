@@ -29,6 +29,23 @@
     .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
     .stages-cap{ font-size:13px; color:var(--muted); }
     .eta{ font-size:14px; color:var(--ink); margin:8px 0 0; }
+    /* липкая шкала готовности */
+    .progress-sticky{ position:sticky; top:0; z-index:8; background:var(--bg); padding:12px 0 10px; }
+    .progress-sticky .ps-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    .progress-sticky .ps-top b{ font-size:17px; color:var(--ink); }
+    .ps-bar{ height:8px; border-radius:999px; background:var(--line); overflow:hidden; }
+    .ps-fill{ height:100%; background:var(--accent); border-radius:999px; transition:width .5s ease; }
+    /* дорожная карта */
+    .roadmap-btn{ display:block; width:100%; text-align:center; background:transparent; color:var(--accent); border:1px solid var(--line); border-radius:10px; padding:11px; font-size:14px; margin:14px 0 0; cursor:pointer; }
+    .roadmap{ display:none; margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .roadmap.open{ display:block; }
+    .rm-row{ display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line); font-size:14px; }
+    .rm-row:last-child{ border-bottom:0; }
+    .rm-row .rm-mark{ width:18px; text-align:center; color:var(--muted); }
+    .rm-row .rm-name{ flex:1; }
+    .rm-row .rm-date{ color:var(--muted); font-size:13px; }
+    .rm-row.done{ color:var(--muted); } .rm-row.done .rm-mark{ color:var(--accent); }
+    .rm-row.current{ background:#faf8f4; font-weight:600; } .rm-row.current .rm-mark{ color:var(--accent); }
 
     /* дайджест «за неделю» */
     .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
@@ -123,17 +140,38 @@
     return many;
   }
 
-  // Веха: плановая дата завершения (клиенту важно «когда закончите»). Тон мягкий.
-  function etaLine(due, status){
-    if(status==='Завершён') return '';
+  // Прогресс в % по текущему этапу (этап 3 из 6 → 50%).
+  function progressPct(status){
+    const idx = STATUSES.findIndex(s=>s.label===status);
+    return idx>=0 ? Math.round((idx+1)/STATUSES.length*100) : 0;
+  }
+  // Липкая шкала готовности — всегда вверху страницы.
+  function progressBar(o){
+    const pct = progressPct(o.status);
+    return `<div class="progress-sticky"><div class="ps-top"><span>Готовность объекта</span><b>${pct}%</b></div>
+      <div class="ps-bar"><div class="ps-fill" style="width:${pct}%"></div></div></div>`;
+  }
+  // Веха: план текущего этапа (или общая дата, если по этапам не задано). Тон мягкий.
+  function etaLine(o){
+    if(o.status==='Завершён') return '';
+    const sd=o.stage_dates||{}, stageDate=sd[o.status], due=stageDate||o.due_date;
+    if(!due) return '';
     const d=new Date(due), today=new Date(new Date().toDateString());
-    const days=Math.round((d-today)/86400000);
-    const date=d.toLocaleDateString('ru-RU');
-    let txt;
-    if(days>0) txt=`Плановое завершение — ${date}, примерно через ${days} ${plural(days,'день','дня','дней')}`;
-    else if(days===0) txt=`Плановое завершение — сегодня, ${date}`;
-    else txt=`Плановое завершение — ${date}. Наводим финальные штрихи.`;
-    return `<div class="eta">🗓 ${esc(txt)}</div>`;
+    const days=Math.round((d-today)/86400000), date=d.toLocaleDateString('ru-RU');
+    const head = stageDate ? `Текущий этап «${o.status}» — план до ${date}` : `Плановое завершение — ${date}`;
+    let tail='';
+    if(days>0) tail=`, примерно через ${days} ${plural(days,'день','дня','дней')}`;
+    else if(days<0) tail='. Наводим финальные штрихи';
+    return `<div class="eta">🗓 ${esc(head+tail)}</div>`;
+  }
+  // Роадмэп: этапы с состоянием (пройден/текущий/впереди) и план-датами.
+  function roadmapHtml(o){
+    const idx = STATUSES.findIndex(s=>s.label===o.status), sd=o.stage_dates||{};
+    return STATUSES.map((s,i)=>{
+      const st = i<idx?'done':i===idx?'current':'up', mark = st==='done'?'✓':st==='current'?'●':'○';
+      const date = sd[s.label] ? new Date(sd[s.label]).toLocaleDateString('ru-RU') : '';
+      return `<div class="rm-row ${st}"><span class="rm-mark">${mark}</span><span class="rm-name">${esc(s.label)}</span><span class="rm-date">${esc(date)}</span></div>`;
+    }).join('');
   }
 
   // Слайдер было/после: самое раннее фото vs самое свежее. Native range — тач-дружелюбно.
@@ -169,13 +207,16 @@
     const digest = weekDigest(feed);
 
     document.getElementById('root').innerHTML = `
+      ${progressBar(o)}
       ${o.cover_url?`<img class="cover" src="${esc(o.cover_url)}">`:''}
       <h1>${esc(o.name)}</h1>
       <div class="meta"><span class="badge">${esc(o.status||'—')}</span></div>
       ${o.address?`<div class="meta">📍 ${esc(o.address)}</div>`:''}
       <div class="weather" id="weather"></div>
       ${stagesBar(o.status)}
-      ${o.due_date ? etaLine(o.due_date, o.status) : ''}
+      ${etaLine(o)}
+      <button class="roadmap-btn" id="roadmapBtn">Показать план работ</button>
+      <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
       ${beforeAfter(feed)}
       <div class="sec">Ход работ</div>
@@ -190,6 +231,8 @@
     document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
     document.querySelectorAll('.ph img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
     wireBeforeAfter();
+    const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');
+    if(rb) rb.onclick=()=>{ const open=rbox.classList.toggle('open'); rb.textContent=open?'Скрыть план работ':'Показать план работ'; };
 
     // Погода (Т7): фразы наполняет исполнитель; пока WEATHER_PHRASES пуст — блок молча пуст.
     if(window.Vibe && o.lat && o.lon){
