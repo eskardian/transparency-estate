@@ -22,6 +22,7 @@
     h1{ font-size:24px; margin:18px 0 6px; }
     .meta{ color:var(--muted); font-size:14px; margin-bottom:4px; }
     .badge{ display:inline-block; padding:3px 11px; border-radius:999px; font-size:13px; color:#fff; background:var(--accent); }
+    .care-badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; color:#5a7043; background:#f2f7ec; border:1px solid #cfe0c2; }
     .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 12px; }
 
     /* прогресс по этапам */
@@ -300,7 +301,7 @@
       ${progressBar(o)}
       ${o.cover_url?`<img class="cover" src="${esc(o.cover_url)}">`:''}
       <h1>${esc(o.name)}</h1>
-      <div class="meta"><span class="badge">${esc(o.status||'—')}</span></div>
+      <div class="meta"><span class="badge">${esc(o.status||'—')}</span>${o.care?' <span class="care-badge">🌿 на сезонном обслуживании</span>':''}</div>
       ${o.address?`<div class="meta">📍 ${esc(o.address)}</div>`:''}
       <div class="weather" id="weather"></div>
       ${stagesBar(o.status)}

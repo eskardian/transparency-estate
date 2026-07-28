@@ -99,7 +99,9 @@
     #sort{ width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); }
     #filters{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
     /* пульт: что требует внимания */
-    .pulse{ display:flex; gap:6px; margin-bottom:10px; }
+    .pulse{ margin-bottom:10px; }
+    .pulse-tiles{ display:flex; gap:6px; }
+    .pulse-care{ display:block; width:100%; margin-top:6px; padding:9px 12px; border:1px solid #cfe0c2; background:#f2f7ec; color:#5a7043; border-radius:9px; font-size:13px; font-family:inherit; cursor:pointer; text-align:left; }
     .pulse-tile{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 4px; border:1px solid var(--line); border-radius:9px; background:#fff; font-family:inherit; }
     .pulse-tile b{ font-size:18px; font-variant-numeric:tabular-nums; color:var(--ink); }
     .pulse-tile span{ font-size:11px; color:var(--muted); text-align:center; line-height:1.15; }
@@ -370,6 +372,15 @@
   // Быстрые теги для отчёта + статусы, требующие фото + распознавание речи
   const QUICK_TAGS = ['Бригада на месте','Завезли материал','Простой','Готово к проверке'];
   const REQUIRE_PHOTO = ['Завершён'];
+  // Сезонный уход: текущий сезон + чек-лист по сезону
+  function curSeason(){ const m=new Date().getMonth()+1; return m>=3&&m<=5?'spring':m>=6&&m<=8?'summer':m>=9&&m<=11?'autumn':'winter'; }
+  const CARE_TASKS = {
+    spring:['Обрезка и формирование','Первая подкормка','Проверка полива после зимы'],
+    summer:['Полив и контроль влаги','Стрижка газона','Прополка и мульчирование'],
+    autumn:['Консервация системы полива','Влагозарядковый полив','Укрытие теплолюбивых'],
+    winter:['Стряхивание снега с крон','Контроль укрытий','Защита от грызунов'],
+  };
+  const SEASON_ADJ = { spring:'весеннего', summer:'летнего', autumn:'осеннего', winter:'зимнего' };
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   // ───────────────────────── Состояние ─────────────────────────
@@ -522,21 +533,40 @@
     const overdue = scope.filter(stageOverdue);
     const weekAgo=Date.now()-7*86400000;
     const week = scope.reduce((n,o)=>n+(o.feed_entries||[]).filter(f=>new Date(f.created_at).getTime()>weekAgo).length,0);
-    return { pending, overdue, week };
+    const care = scope.filter(o=>o.care);
+    return { pending, overdue, week, care };
   }
   function renderPulse(){
     const box=$('pulse'); if(!box) return;
     if(!isAdmin){ box.style.display='none'; return; }
-    box.style.display='flex';
-    const { pending, overdue, week } = pulseData();
+    box.style.display='block';
+    const { pending, overdue, week, care } = pulseData();
     box.innerHTML = `
-      <button class="pulse-tile ${pending.length?'alert':''}" id="pulsePending"><b>${pending.length}</b><span>ждёт согласования</span></button>
-      <button class="pulse-tile ${overdue.length?'warn':''}" id="pulseOverdue"><b>${overdue.length}</b><span>просрочено</span></button>
-      <div class="pulse-tile"><b>${week}</b><span>за неделю</span></div>`;
+      <div class="pulse-tiles">
+        <button class="pulse-tile ${pending.length?'alert':''}" id="pulsePending"><b>${pending.length}</b><span>ждёт согласования</span></button>
+        <button class="pulse-tile ${overdue.length?'warn':''}" id="pulseOverdue"><b>${overdue.length}</b><span>просрочено</span></button>
+        <div class="pulse-tile"><b>${week}</b><span>за неделю</span></div>
+      </div>
+      ${care.length?`<button class="pulse-care" id="pulseCare">На уходе: ${care.length} · пора ${SEASON_ADJ[curSeason()]} ухода</button>`:''}`;
     $('pulsePending').onclick=()=> pulseModal('Ждёт согласования',
       'Отчёты, которых клиент пока не видит. Тап — открыть объект и решить.', pending.map(x=>({o:x.o,f:x.f})));
     $('pulseOverdue').onclick=()=> pulseModal('Просрочено',
       'Этап или срок прошёл, объект не завершён.', overdue.map(o=>({o})));
+    if($('pulseCare')) $('pulseCare').onclick=()=> careModal(care);
+  }
+  // Список объектов на уходе + чек-лист текущего сезона
+  function careModal(list){
+    const s=curSeason(), tasks=CARE_TASKS[s]||[];
+    openModal(`<h3>Сезонный уход · ${esc(SEASON_ADJ[s])} сезона</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Что делаем в этом сезоне:</p>
+      <div style="margin-bottom:14px">${tasks.map(t=>`<div class="freact" style="margin:4px 0">• ${esc(t)}</div>`).join('')}</div>
+      <div class="section-title">Объекты на уходе</div>
+      ${list.length? list.map(o=>`<div class="act-item pulse-row" data-id="${o.id}" style="cursor:pointer;border:1px solid var(--line);border-radius:9px;margin-bottom:8px">
+        <img src="${o.cover_url||'icon.svg'}"><div><div class="ai-obj">${esc(o.name)}</div><div class="ai-time">${esc(o.address||'')}</div></div></div>`).join('')
+      : '<div class="empty" style="text-align:left;padding:8px 0">Нет объектов на уходе.</div>'}
+      <div class="mactions"><button class="btn ghost" id="cmClose">Закрыть</button></div>`);
+    $('cmClose').onclick=closeModal;
+    $('mbox').querySelectorAll('.pulse-row').forEach(r=> r.onclick=()=>{ closeModal(); if(window.innerWidth<=640) $('sidebar').classList.remove('open'); selectObject(+r.dataset.id); });
   }
   function pulseModal(title, sub, rows){
     openModal(`<h3>${esc(title)}</h3>
@@ -626,6 +656,7 @@
       <div class="pactions">
         <button class="btn ghost" id="editObj">Редактировать</button>
         ${canManage(o)?'<button class="btn ghost" id="roadmapObj">План работ</button>':''}
+        ${canManage(o)?`<button class="btn ghost" id="careObj">${o.care?'Снять с ухода':'На уход'}</button>`:''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
@@ -678,6 +709,7 @@
     if($('docsSection')) loadDocs(id);
     $('editObj').onclick = ()=> objectForm(o);
     if($('roadmapObj')) $('roadmapObj').onclick = ()=> roadmapModal(o);
+    if($('careObj')) $('careObj').onclick = ()=> toggleCare(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -864,6 +896,12 @@
       if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
       o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
     };
+  }
+  // Переключить объект на сезонный уход / снять
+  async function toggleCare(o){
+    const { error } = await sb.from('objects').update({ care: !o.care }).eq('id', o.id);
+    if(error){ toast('Не удалось изменить — попробуй ещё раз. ('+error.message+')'); return; }
+    o.care=!o.care; toast(o.care?'Объект на сезонном уходе':'Снят с ухода'); reload();
   }
 
   // добавление объекта: по адресу (геокодер Яндекса) или точкой на карте
