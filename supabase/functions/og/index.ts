@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
 <meta name="twitter:card" content="summary_large_image">
 <meta http-equiv="refresh" content="0; url=${esc(target)}">
 <script>location.replace(${JSON.stringify(target)})</script>
-</head><body style="font-family:-apple-system,sans-serif;padding:40px;text-align:center;color:#8a8782">Открываем объект…</body></html>`;
+</head><body style="font-family:-apple-system,sans-serif;padding:40px;text-align:center;color:#8a8782">
+Открываем объект… <br><br><a href="${esc(target)}" style="color:#6b7257">Нажмите, если не открылось →</a>
+</body></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 });
