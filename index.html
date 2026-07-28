@@ -1003,7 +1003,7 @@
       if(error){ toast('Ошибка: '+error.message); return; }
       o.share_token = token;
     }
-    const url = location.origin + '/share.html?t=' + token;
+    const url = location.origin + '/o?t=' + token;  // обёртка с OG-превью → редирект на портал
     openModal(`<h3>Ссылка для клиента</h3>
       <p style="font-size:13px;color:var(--muted);margin-top:0">Открывается без логина — только этот объект, только просмотр.</p>
       <div class="field"><input id="shareUrl" value="${esc(url)}" readonly></div>
