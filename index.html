@@ -161,6 +161,7 @@
     .feed-item .fphotos{ display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
     .feed-item .fphotos img{ width:60px; height:60px; object-fit:cover; border-radius:6px; cursor:pointer; }
     .fvis{ font-size:12px; color:var(--muted); margin-top:6px; }
+    .freact{ font-size:12px; color:var(--muted); margin-top:6px; }
     .fvis.pending{ color:#d68a3a; }
     .fvis-btn{ background:none; border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:12px; color:var(--ink); margin-left:6px; cursor:pointer; }
     .addfeed{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:8px; }
@@ -424,7 +425,7 @@
 
   // ───────────────────────── Загрузка данных ─────────────────────────
   async function reload(){
-    const { data, error } = await sb.from('objects').select('*, feed_entries(*)').order('updated_at',{ascending:false});
+    const { data, error } = await sb.from('objects').select('*, feed_entries(*, feed_reactions(emoji))').order('updated_at',{ascending:false});
     if(error){ toast('Не получилось загрузить данные — проверь связь и потяни обновить. ('+error.message+')'); return; }
     objects = data||[];
     renderMarkers(); renderFilters(); renderSidebar(); renderPulse(); updateBell();
@@ -552,6 +553,12 @@
     $('mbox').querySelectorAll('.pulse-row').forEach(r=> r.onclick=()=>{ closeModal(); if(window.innerWidth<=640) $('sidebar').classList.remove('open'); selectObject(+r.dataset.id); });
   }
 
+  // Сводка реакций клиента по записи (менеджеру — видеть вовлечённость)
+  function reactSummary(f){
+    const rs=f.feed_reactions||[]; if(!rs.length) return '';
+    const c={}; rs.forEach(r=> c[r.emoji]=(c[r.emoji]||0)+1);
+    return `<div class="freact">${Object.entries(c).map(([e,n])=>`${e} ${n}`).join('   ')} · реакции клиента</div>`;
+  }
   // ───────────────────────── Этапы / PDF / голос ─────────────────────────
   function stagesBar(status){
     const idx = STATUSES.findIndex(s=>s.label===status);
@@ -646,6 +653,7 @@
           </div>
           <div class="fbody">${esc(f.body)}</div>
           ${(f.photos||[]).length?`<div class="fphotos">${f.photos.map(p=>`<img src="${p}" data-full="${p}">`).join('')}</div>`:''}
+          ${reactSummary(f)}
           ${canManage(o)&&f.client_state!==undefined?`<div class="fvis ${esc(f.client_state)}">${
             f.client_state==='approved'?'клиент видит':f.client_state==='hidden'?'скрыто от клиента':'ждёт согласования'
           }<button class="fvis-btn" data-fid="${f.id}" data-to="${f.client_state==='approved'?'hidden':'approved'}">${f.client_state==='approved'?'скрыть':'показать клиенту'}</button></div>`:''}

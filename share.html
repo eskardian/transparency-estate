@@ -59,6 +59,11 @@
     .live-body{ position:relative; width:100%; aspect-ratio:16/9; background:#000; }
     .live-body iframe, .live-body video{ position:absolute; inset:0; width:100%; height:100%; border:0; object-fit:cover; }
     .live-win.expanded{ left:50%; top:50%; right:auto; bottom:auto; transform:translate(-50%,-50%); width:min(880px,94vw); }
+    /* реакции клиента */
+    .react{ display:flex; gap:8px; margin-top:10px; }
+    .react-btn{ display:inline-flex; align-items:center; gap:5px; font-size:14px; background:transparent; border:1px solid var(--line); border-radius:999px; padding:5px 11px; cursor:pointer; color:var(--ink); font-family:inherit; }
+    .react-btn .rc{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .react-btn.reacted{ border-color:var(--accent); background:#f2f5ee; }
 
     /* дайджест «за неделю» */
     .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
@@ -137,6 +142,20 @@
   }
 
   function state(msg){ document.getElementById('root').innerHTML = `<div class="state">${esc(msg)}</div>`; }
+
+  // Реакции клиента на запись ленты (одна на кадр+эмодзи с браузера, дедуп через localStorage).
+  const REACT_EMOJIS = ['👍','❤️','🔥'];
+  function reactionRow(f){
+    const r=f.reactions||{};
+    return `<div class="react" data-fid="${f.id}">${REACT_EMOJIS.map(e=>`<button class="react-btn${localStorage.getItem('tl_react_'+f.id+'_'+e)?' reacted':''}" data-emo="${e}">${e} <span class="rc">${r[e]||0}</span></button>`).join('')}</div>`;
+  }
+  async function reactTo(btn){
+    const row=btn.closest('.react'), fid=+row.dataset.fid, emo=btn.dataset.emo, key='tl_react_'+fid+'_'+emo;
+    if(localStorage.getItem(key)) return;
+    const cnt=btn.querySelector('.rc');
+    cnt.textContent=(+cnt.textContent||0)+1; btn.classList.add('reacted');
+    try{ localStorage.setItem(key,'1'); await sb.rpc('react_shared',{ token, fid, emo }); }catch(e){}
+  }
 
   function stagesBar(status){
     const idx = STATUSES.findIndex(s=>s.label===status);
@@ -282,6 +301,7 @@
           <div class="d">${f.status?esc(f.status)+' · ':''}${new Date(f.created_at).toLocaleDateString('ru-RU')}</div>
           ${f.body?`<div class="b">${esc(f.body)}</div>`:''}
           ${(f.photos||[]).length?`<div class="ph">${f.photos.map(p=>`<img src="${esc(p)}" data-full="${esc(p)}">`).join('')}</div>`:''}
+          ${reactionRow(f)}
         </div>`).join('') : '<div class="item">Пока тихо — скоро здесь появятся первые новости с участка.</div>'}
       ${contactWindows(o)}
     `;
@@ -291,6 +311,7 @@
     const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');
     if(rb) rb.onclick=()=>{ const open=rbox.classList.toggle('open'); rb.textContent=open?'Скрыть план работ':'Показать план работ'; };
     const lo=document.getElementById('liveOpen'); if(lo) lo.onclick=openLive;
+    document.querySelectorAll('.react-btn').forEach(b=> b.onclick=()=> reactTo(b));
 
     // Погода (Т7): фразы наполняет исполнитель; пока WEATHER_PHRASES пуст — блок молча пуст.
     if(window.Vibe && o.lat && o.lon){
