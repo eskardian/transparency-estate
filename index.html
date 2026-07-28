@@ -96,6 +96,14 @@
     #search{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; }
     #sort{ width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); }
     #filters{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    /* пульт: что требует внимания */
+    .pulse{ display:flex; gap:6px; margin-bottom:10px; }
+    .pulse-tile{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 4px; border:1px solid var(--line); border-radius:9px; background:#fff; font-family:inherit; }
+    .pulse-tile b{ font-size:18px; font-variant-numeric:tabular-nums; color:var(--ink); }
+    .pulse-tile span{ font-size:11px; color:var(--muted); text-align:center; line-height:1.15; }
+    button.pulse-tile{ cursor:pointer; }
+    .pulse-tile.alert{ border-color:#d68a3a; background:#fdf4ea; } .pulse-tile.alert b{ color:#c9781f; }
+    .pulse-tile.warn{ border-color:#b4453a; background:#fbeeed; } .pulse-tile.warn b{ color:#b4453a; }
     .chip{ font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--muted); }
     .chip.active{ color:#fff; border-color:transparent; }
     #list{ flex:1; overflow:auto; }
@@ -277,6 +285,7 @@
     <div class="body">
       <aside id="sidebar">
         <div class="top">
+          <div id="pulse" class="pulse" style="display:none"></div>
           <select id="company" style="display:none;width:100%;margin-bottom:8px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:500">
             <option value="">Все компании</option>
             <option value="kampika">Kampika</option>
@@ -418,7 +427,7 @@
     const { data, error } = await sb.from('objects').select('*, feed_entries(*)').order('updated_at',{ascending:false});
     if(error){ toast('Не получилось загрузить данные — проверь связь и потяни обновить. ('+error.message+')'); return; }
     objects = data||[];
-    renderMarkers(); renderFilters(); renderSidebar(); updateBell();
+    renderMarkers(); renderFilters(); renderSidebar(); renderPulse(); updateBell();
     if($('activity').style.display==='block') renderActivity();
     if(selectedId!=null && objects.find(o=>o.id===selectedId)) renderPanel(selectedId);
   }
@@ -494,6 +503,53 @@
         </div>
       </div>`).join('');
     list.querySelectorAll('.row').forEach(r=> r.onclick=()=>{ selectObject(+r.dataset.id); if(window.innerWidth<=640) $('sidebar').classList.remove('open'); });
+  }
+
+  // ───────────────────────── Пульт (что требует внимания) ─────────────────────────
+  function stageOverdue(o){
+    if(o.status==='Завершён') return false;
+    const sd=(o.stage_dates||{})[o.status];
+    return dueOverdue(o.due_date) || (sd && new Date(sd) < new Date(new Date().toDateString()));
+  }
+  function pulseData(){
+    const scope = objects.filter(inCompany);
+    const pending=[];
+    scope.forEach(o=>(o.feed_entries||[]).forEach(f=>{ if(f.client_state==='pending') pending.push({o,f}); }));
+    pending.sort((a,b)=> new Date(b.f.created_at)-new Date(a.f.created_at));
+    const overdue = scope.filter(stageOverdue);
+    const weekAgo=Date.now()-7*86400000;
+    const week = scope.reduce((n,o)=>n+(o.feed_entries||[]).filter(f=>new Date(f.created_at).getTime()>weekAgo).length,0);
+    return { pending, overdue, week };
+  }
+  function renderPulse(){
+    const box=$('pulse'); if(!box) return;
+    if(!isAdmin){ box.style.display='none'; return; }
+    box.style.display='flex';
+    const { pending, overdue, week } = pulseData();
+    box.innerHTML = `
+      <button class="pulse-tile ${pending.length?'alert':''}" id="pulsePending"><b>${pending.length}</b><span>ждёт согласования</span></button>
+      <button class="pulse-tile ${overdue.length?'warn':''}" id="pulseOverdue"><b>${overdue.length}</b><span>просрочено</span></button>
+      <div class="pulse-tile"><b>${week}</b><span>за неделю</span></div>`;
+    $('pulsePending').onclick=()=> pulseModal('Ждёт согласования',
+      'Отчёты, которых клиент пока не видит. Тап — открыть объект и решить.', pending.map(x=>({o:x.o,f:x.f})));
+    $('pulseOverdue').onclick=()=> pulseModal('Просрочено',
+      'Этап или срок прошёл, объект не завершён.', overdue.map(o=>({o})));
+  }
+  function pulseModal(title, sub, rows){
+    openModal(`<h3>${esc(title)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">${esc(sub)}</p>
+      ${rows.length? rows.map(({o,f})=>{
+        const thumb=(f&&f.photos&&f.photos[0])||o.cover_url||'icon.svg';
+        const line = f ? (f.body?esc(f.body):'') : `срок ${o.due_date?new Date(o.due_date).toLocaleDateString('ru-RU'):((o.stage_dates||{})[o.status]?new Date((o.stage_dates||{})[o.status]).toLocaleDateString('ru-RU'):'—')}`;
+        return `<div class="act-item pulse-row" data-id="${o.id}" style="cursor:pointer;border:1px solid var(--line);border-radius:9px;margin-bottom:8px">
+          <img src="${thumb}">
+          <div><div class="ai-obj">${esc(o.name)} <span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span></div>
+          ${line?`<div class="ai-body">${line}</div>`:''}${f?`<div class="ai-time">${relDate(f.created_at)}</div>`:''}</div>
+        </div>`;
+      }).join('') : '<div class="empty" style="text-align:left;padding:8px 0">Пусто — здесь всё в порядке.</div>'}
+      <div class="mactions"><button class="btn ghost" id="plClose">Закрыть</button></div>`);
+    $('plClose').onclick=closeModal;
+    $('mbox').querySelectorAll('.pulse-row').forEach(r=> r.onclick=()=>{ closeModal(); if(window.innerWidth<=640) $('sidebar').classList.remove('open'); selectObject(+r.dataset.id); });
   }
 
   // ───────────────────────── Этапы / PDF / голос ─────────────────────────
