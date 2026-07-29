@@ -1,0 +1,96 @@
+/* ===== Стили клиентского портала (share.html) ===== */
+    :root{ --bg:#f5f3ef; --card:#fff; --ink:#2b2b29; --muted:#8a8782; --line:#e3dfd8; --accent:#6b7257; }
+    /* Т1. Сезонные палитры (класс season-* ставит Vibe.applySeason). Сдвиг деликатный. */
+    body.season-spring{ --accent:#4e7a3e; --bg:#f4f4ef; --line:#e0e2d8; }
+    body.season-summer{ --accent:#3f6f32; --bg:#f4f5ef; --line:#dee3d6; }
+    body.season-autumn{ --accent:#7d5f34; --bg:#f6f3ec; --line:#e6ded1; }
+    body.season-winter{ --accent:#4c6152; --bg:#f3f3f1; --line:#dfe0dc; --muted:#86867f; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); transition:background .4s ease,color .4s ease; }
+    .wrap{ max-width:640px; margin:0 auto; padding:0 16px 48px; }
+    header{ text-align:center; padding:22px 0 10px; font-weight:600; letter-spacing:1px; }
+    .cover{ width:100%; height:220px; object-fit:cover; border-radius:14px; background:#ece8e0; }
+    h1{ font-size:24px; margin:18px 0 6px; }
+    .meta{ color:var(--muted); font-size:14px; margin-bottom:4px; }
+    .badge{ display:inline-block; padding:3px 11px; border-radius:999px; font-size:13px; color:#fff; background:var(--accent); }
+    .care-badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; color:#5a7043; background:#f2f7ec; border:1px solid #cfe0c2; }
+    .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 12px; }
+
+    /* прогресс по этапам */
+    .stages{ display:flex; gap:3px; margin:14px 0 6px; }
+    .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
+    .stages-cap{ font-size:13px; color:var(--muted); }
+    .eta{ font-size:14px; color:var(--ink); margin:8px 0 0; }
+    /* липкая шкала готовности */
+    .progress-sticky{ position:sticky; top:0; z-index:8; background:var(--bg); padding:12px 0 10px; }
+    .progress-sticky .ps-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    .progress-sticky .ps-top b{ font-size:17px; color:var(--ink); }
+    .ps-bar{ height:8px; border-radius:999px; background:var(--line); overflow:hidden; }
+    .ps-fill{ height:100%; background:var(--accent); border-radius:999px; transition:width .5s ease; }
+    /* дорожная карта */
+    .roadmap-btn{ display:block; width:100%; text-align:center; background:transparent; color:var(--accent); border:1px solid var(--line); border-radius:10px; padding:11px; font-size:14px; margin:14px 0 0; cursor:pointer; }
+    .roadmap{ display:none; margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .roadmap.open{ display:block; }
+    .rm-row{ display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line); font-size:14px; }
+    .rm-row:last-child{ border-bottom:0; }
+    .rm-row .rm-mark{ width:18px; text-align:center; color:var(--muted); }
+    .rm-row .rm-name{ flex:1; }
+    .rm-row .rm-date{ color:var(--muted); font-size:13px; }
+    .rm-row.done{ color:var(--muted); } .rm-row.done .rm-mark{ color:var(--accent); }
+    .rm-row.current{ background:#faf8f4; font-weight:600; } .rm-row.current .rm-mark{ color:var(--accent); }
+    /* прямой эфир — кнопка */
+    .live-open{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; background:#b4453a; color:#fff; border:0; border-radius:10px; padding:12px; font-size:15px; font-family:inherit; margin:14px 0 0; cursor:pointer; }
+    .live-open .lo-dot{ width:9px; height:9px; border-radius:50%; background:#fff; animation:livepulse 1.4s infinite; }
+    @keyframes livepulse{ 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
+    /* прямой эфир — плавающее окно (PiP) */
+    .live-win{ position:fixed; right:14px; bottom:14px; width:300px; max-width:92vw; z-index:80; background:#111; border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.45); flex-direction:column; }
+    .live-head{ display:flex; align-items:center; gap:8px; padding:7px 10px; background:#1c1c1c; color:#fff; cursor:move; user-select:none; }
+    .live-badge{ font-size:10px; font-weight:700; letter-spacing:.5px; color:#fff; background:#b4453a; padding:2px 6px; border-radius:4px; }
+    .live-title{ font-size:13px; } .live-sp{ flex:1; }
+    .live-btn{ background:none; border:0; color:#fff; font-size:14px; cursor:pointer; padding:2px 6px; line-height:1; }
+    .live-body{ position:relative; width:100%; aspect-ratio:16/9; background:#000; }
+    .live-body iframe, .live-body video{ position:absolute; inset:0; width:100%; height:100%; border:0; object-fit:cover; }
+    .live-win.expanded{ left:50%; top:50%; right:auto; bottom:auto; transform:translate(-50%,-50%); width:min(880px,94vw); }
+    /* реакции клиента */
+    .react{ display:flex; gap:8px; margin-top:10px; }
+    .react-btn{ display:inline-flex; align-items:center; gap:5px; font-size:14px; background:transparent; border:1px solid var(--line); border-radius:999px; padding:5px 11px; cursor:pointer; color:var(--ink); font-family:inherit; }
+    .react-btn .rc{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .react-btn.reacted{ border-color:var(--accent); background:#f2f5ee; }
+    /* документы для клиента */
+    .docs{ display:flex; flex-direction:column; gap:8px; }
+    .doc-dl{ display:block; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:14px; color:var(--ink); cursor:pointer; font-family:inherit; }
+    /* фото-галерея */
+    .gallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .gallery img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; cursor:pointer; }
+
+    /* дайджест «за неделю» */
+    .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
+    .digest .dh{ font-size:15px; font-weight:500; margin-bottom:6px; }
+    .digest .dl{ font-size:14px; color:var(--muted); }
+
+    /* погода (Т7 наполнит фразами через Vibe) */
+    .weather{ font-size:14px; color:var(--muted); margin:6px 0 2px; min-height:0; }
+
+    /* таймлапс «как рос участок» */
+    .tl{ position:relative; width:100%; border-radius:14px; overflow:hidden; background:#ece8e0; }
+    .tl img{ display:block; width:100%; aspect-ratio:4/3; object-fit:cover; }
+    .tl-ctl{ display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--card); }
+    .tl-play{ flex:0 0 auto; width:38px; height:38px; border-radius:50%; border:0; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
+    .tl-ctl input[type=range]{ flex:1; accent-color:var(--accent); }
+    .tl-date{ flex:0 0 auto; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:74px; text-align:right; }
+
+    .item{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+    .item .d{ color:var(--muted); font-size:12px; margin-bottom:5px; }
+    .item .b{ font-size:15px; white-space:pre-wrap; }
+    .item .ph{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .item .ph img{ width:100%; max-width:280px; border-radius:8px; cursor:pointer; }
+    .state{ text-align:center; color:var(--muted); padding:80px 16px; font-size:15px; }
+
+    /* контактные окна */
+    .mgr{ display:block; text-align:center; text-decoration:none; background:var(--accent); color:#fff; padding:14px; border-radius:12px; font-size:15px; margin:12px 0 0; }
+    .mgr.ghost{ background:transparent; color:var(--accent); border:1px solid var(--line); }
+
+    footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
+    #lb{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; }
+    #lb.open{ display:flex; } #lb img{ max-width:94vw; max-height:94vh; border-radius:8px; }
+  
