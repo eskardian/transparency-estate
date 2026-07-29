@@ -68,6 +68,9 @@
     /* документы для клиента */
     .docs{ display:flex; flex-direction:column; gap:8px; }
     .doc-dl{ display:block; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:14px; color:var(--ink); cursor:pointer; font-family:inherit; }
+    /* фото-галерея */
+    .gallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .gallery img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; cursor:pointer; }
 
     /* дайджест «за неделю» */
     .digest{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:20px 0; }
@@ -268,6 +271,15 @@
     };
   }
 
+  // Галерея: все фото ленты сеткой, тап → лайтбокс (полный экран).
+  function galleryHtml(feed){
+    const photos=[];
+    feed.forEach(f => (f.photos||[]).forEach(p => photos.push(p)));
+    if(!photos.length) return '';
+    return `<div class="sec">Фотографии — ${photos.length}</div>
+      <div class="gallery">${photos.map(p=>`<img src="${esc(p)}" data-full="${esc(p)}" loading="lazy">`).join('')}</div>`;
+  }
+
   // Прямой эфир: плеер по типу ссылки. YouTube → iframe; HLS/mp4 → video (iOS/Safari натив;
   // кроссбраузерный HLS без VPN — путь 2, self-hosted hls.js); иначе — общий эмбед.
   function liveEmbed(url){
@@ -311,6 +323,7 @@
       <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
       ${timelapse(feed)}
+      ${galleryHtml(feed)}
       <div class="sec">Ход работ</div>
       ${feed.length? feed.map(f=>`
         <div class="item">
@@ -323,7 +336,7 @@
       ${contactWindows(o)}
     `;
     document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
-    document.querySelectorAll('.ph img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
+    document.querySelectorAll('.ph img, .gallery img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
     wireTimelapse();
     const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');
     if(rb) rb.onclick=()=>{ const open=rbox.classList.toggle('open'); rb.textContent=open?'Скрыть план работ':'Показать план работ'; };
