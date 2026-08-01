@@ -41,6 +41,7 @@
       <div class="viewtabs">
         <button class="vt active" id="tabMap">Карта</button>
         <button class="vt" id="tabAct">Активность</button>
+        <button class="vt" id="tabCal">Календарь</button>
         <button class="vt" id="tabContent" style="display:none">Контент</button>
       </div>
       <span class="spacer"></span>
@@ -87,6 +88,8 @@
       <div id="activity"></div>
       <!-- ЭКРАН КОНТЕНТА -->
       <div id="content"></div>
+      <!-- ЭКРАН КАЛЕНДАРЯ -->
+      <div id="calendar"></div>
 
       <!-- ПАНЕЛЬ ОБЪЕКТА -->
       <div id="panel">
@@ -212,6 +215,7 @@
     objects = data||[];
     renderMarkers(); renderFilters(); renderSidebar(); renderPulse(); updateBell();
     if($('activity').style.display==='block') renderActivity();
+    if($('calendar').style.display==='block') renderCalendar();
     if(selectedId!=null && objects.find(o=>o.id===selectedId)) renderPanel(selectedId);
   }
 
@@ -865,18 +869,63 @@
     }).join('');
     box.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ setView('map'); selectObject(+el.dataset.id); });
   }
+  // Календарь: вехи из плановых дат этапов (текущий и впереди) + сроки сдачи. Прошедшие этапы и завершённые объекты не показываем.
+  const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  function calendarEvents(){
+    const ev=[];
+    objects.filter(inCompany).forEach(o=>{
+      if(o.status==='Завершён') return;
+      const curIdx = STATUSES.findIndex(s=>s.label===o.status);
+      const sd = o.stage_dates||{};
+      STATUSES.forEach((s,i)=>{
+        if(i<curIdx || s.label==='Завершён') return;
+        if(sd[s.label]) ev.push({ date:sd[s.label], o, label:s.label, kind:'stage', current:i===curIdx });
+      });
+      if(o.due_date) ev.push({ date:o.due_date, o, label:'Срок сдачи', kind:'due' });
+    });
+    return ev.sort((a,b)=> a.date<b.date?-1: a.date>b.date?1:0); // 'YYYY-MM-DD' — лексикографика = хронология
+  }
+  function renderCalendar(){
+    const box=$('calendar');
+    const ev=calendarEvents();
+    if(!ev.length){ box.innerHTML='<div class="empty">Сроков пока нет. Проставь даты этапов в «Плане работ» объекта — появятся здесь.</div>'; return; }
+    const today=new Date(), d30=new Date(); d30.setDate(d30.getDate()+30);
+    const T=isoLocal(today), T30=isoLocal(d30);
+    const fmt = iso => { const dt=new Date(iso+'T00:00'); const s=dt.toLocaleDateString('ru',{day:'numeric',month:'short'}); return dt.getFullYear()!==today.getFullYear()? `${s} ${dt.getFullYear()}`:s; };
+    const groups=[
+      {key:'over', title:'Просрочено',        items:ev.filter(e=>e.date<T)},
+      {key:'soon', title:'Ближайшие 30 дней', items:ev.filter(e=>e.date>=T && e.date<=T30)},
+      {key:'later',title:'Позже',             items:ev.filter(e=>e.date>T30)},
+    ].filter(g=>g.items.length);
+    box.innerHTML='<div class="act-head">Что и когда — по срокам</div>'+groups.map(g=>
+      `<div class="cal-group cal-${g.key}"><div class="cal-gh">${g.title} · ${g.items.length}</div>`+
+      g.items.map(e=>{
+        const tag = e.kind==='due' ? 'Срок сдачи' : (e.current?'Текущий этап':'Этап');
+        return `<div class="cal-item${e.date<T?' od':''}" data-id="${e.o.id}">
+          <div class="cal-date">${fmt(e.date)}</div>
+          <div class="cal-mid"><div class="cal-obj">${esc(e.o.name)}</div>
+            <div class="cal-sub"><span class="cal-tag">${tag}</span> ${e.kind==='due'?'':esc(e.label)}</div></div>
+          <span class="cal-dot" style="background:${e.kind==='due'?'#b4453a':statusColor(e.o.status)}"></span>
+        </div>`;
+      }).join('')+`</div>`).join('');
+    box.querySelectorAll('.cal-item').forEach(el=> el.onclick=()=>{ setView('map'); selectObject(+el.dataset.id); });
+  }
   function setView(v){
     $('activity').style.display = v==='activity'?'block':'none';
     $('content').style.display = v==='content'?'block':'none';
+    $('calendar').style.display = v==='calendar'?'block':'none';
     $('tabMap').classList.toggle('active', v==='map');
     $('tabAct').classList.toggle('active', v==='activity');
+    $('tabCal').classList.toggle('active', v==='calendar');
     $('tabContent').classList.toggle('active', v==='content');
     if(v==='activity') renderActivity();
     else if(v==='content') renderContent();
+    else if(v==='calendar') renderCalendar();
     else if(map && map.container) map.container.fitToViewport();
   }
   $('tabMap').onclick = ()=> setView('map');
   $('tabAct').onclick = ()=> setView('activity');
+  $('tabCal').onclick = ()=> setView('calendar');
   $('tabContent').onclick = ()=> setView('content');
 
   // ───────────────────────── Админ-панель (только супер-админ) ─────────────────────────
@@ -1013,6 +1062,7 @@
     renderFilters(); renderMarkers(); renderSidebar();
     if($('activity').style.display==='block') renderActivity();
     if($('content').style.display==='block') renderContent();
+    if($('calendar').style.display==='block') renderCalendar();
   };
   $('hmenu').onclick = ()=> $('sidebar').classList.toggle('open');
 

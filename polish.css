@@ -169,7 +169,21 @@
     .vt{ border:0; background:none; padding:6px 14px; border-radius:6px; font-size:13px; color:var(--muted); cursor:pointer; }
     .vt.active{ background:var(--card); color:var(--ink); font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,.12); }
     /* экран активности */
-    #activity{ position:absolute; top:0; right:0; bottom:0; left:300px; background:var(--bg); overflow:auto; z-index:16; display:none; }
+    #activity,#calendar{ position:absolute; top:0; right:0; bottom:0; left:300px; background:var(--bg); overflow:auto; z-index:16; display:none; }
+    #calendar{ padding-bottom:24px; }
+    .cal-group{ margin-top:6px; }
+    .cal-gh{ font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--muted); padding:14px 16px 6px; }
+    .cal-over .cal-gh{ color:#b4453a; }
+    .cal-item{ display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--line); cursor:pointer; background:var(--card); transition:background .12s ease; }
+    .cal-item:hover{ background:var(--hover); }
+    .cal-item.od{ background:#fbf1ee; }
+    .cal-date{ flex:0 0 62px; font-size:13px; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
+    .cal-item.od .cal-date{ color:#b4453a; }
+    .cal-mid{ flex:1 1 auto; min-width:0; }
+    .cal-obj{ font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cal-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .cal-tag{ display:inline-block; font-size:11px; color:var(--accent); font-weight:600; margin-right:5px; }
+    .cal-dot{ flex:0 0 auto; width:9px; height:9px; border-radius:50%; }
     .act-head{ font-size:13px; color:var(--muted); padding:14px 16px 6px; }
     .act-item{ display:flex; gap:11px; padding:12px 16px; border-bottom:1px solid var(--line); cursor:pointer; background:var(--card); }
     .act-item:hover{ background:#faf8f4; }
@@ -226,7 +240,7 @@
       .hmenu{ display:block; }
       #sidebar{ position:absolute; top:0; left:0; height:100%; z-index:30; transform:translateX(-105%); transition:transform .25s; box-shadow:var(--shadow); }
       #sidebar.open{ transform:none; }
-      #activity,#content{ left:0; }
+      #activity,#content,#calendar{ left:0; }
       .logo,.who{ display:none; }
     }
   
