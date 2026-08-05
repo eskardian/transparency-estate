@@ -204,6 +204,29 @@
     document.getElementById('liveBody').innerHTML=''; // остановить поток
   }
 
+  // White-label: шапка со студийным лого и именем.
+  function brandHeader(o){
+    if(!o.logo_url && !o.display_name) return '';
+    return `<div class="brand">${o.logo_url?`<img class="brand-logo" src="${esc(o.logo_url)}" alt="">`:''}${o.display_name?`<span class="brand-name">${esc(o.display_name)}</span>`:''}</div>`;
+  }
+  // Режим ухода после сдачи: сезонный гайд по саду.
+  const CARE_TIPS = {
+    spring: ['Осмотрите сад после зимы: снимите укрытия, уберите сломанные ветки.', 'Первая подкормка и санитарная обрезка — до активного роста.', 'Пролейте посадки, обновите мульчу в приствольных кругах.'],
+    summer: ['Полив в жару — рано утром или вечером, обильно и под корень.', 'Стрижка газона раз в неделю, прополка цветников.', 'Следите за вредителями на молодых посадках — заметили, напишите нам.'],
+    autumn: ['Влагозарядный полив деревьев и хвойных перед холодами.', 'Уберите листву с газона, замульчируйте многолетники.', 'Укройте теплолюбивые растения до первых устойчивых морозов.'],
+    winter: ['Стряхивайте тяжёлый снег с хвойных и крон — чтобы не разломило.', 'Не ходите по газону под снегом.', 'Проверьте укрытия после оттепелей и метелей.'],
+  };
+  function afterCare(o){
+    if(o.status!=='Завершён') return '';
+    const s = (window.Vibe && Vibe.season) ? Vibe.season() : 'summer';
+    const title = {spring:'Весной',summer:'Летом',autumn:'Осенью',winter:'Зимой'}[s];
+    return `<div class="care-guide">
+      <div class="cg-head">🌿 Уход за садом · ${title}</div>
+      <ul class="cg-list">${CARE_TIPS[s].map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+      <div class="cg-foot">Мы рядом — если сомневаетесь, что и когда делать, напишите менеджеру.</div>
+    </div>`;
+  }
+
   (async()=>{
     if(!token){ state('Ссылка недоступна. Попроси менеджера прислать её заново.'); return; }
     const { data, error } = await sb.rpc('get_shared_object', { token });
@@ -213,13 +236,16 @@
     window.__liveUrl = o.live_url;
     const feed = o.feed || [];
     const digest = weekDigest(feed);
+    if(o.brand_color) document.body.style.setProperty('--accent', o.brand_color); // инлайн на body > сезонного класса
 
     document.getElementById('root').innerHTML = `
+      ${brandHeader(o)}
       ${progressBar(o)}
       ${o.cover_url?`<img class="cover" src="${esc(o.cover_url)}">`:''}
       <h1>${esc(o.name)}</h1>
       <div class="meta"><span class="badge">${esc(o.status||'—')}</span>${o.care?' <span class="care-badge">🌿 на сезонном обслуживании</span>':''}</div>
       ${o.address?`<div class="meta">📍 ${esc(o.address)}</div>`:''}
+      ${afterCare(o)}
       <div class="weather" id="weather"></div>
       ${stagesBar(o.status)}
       ${etaLine(o)}
@@ -240,7 +266,9 @@
       ${(o.docs&&o.docs.length)?`<div class="sec">Документы</div><div class="docs">${o.docs.map(d=>`<button class="doc-dl" data-id="${d.id}">📄 ${esc(d.name)}</button>`).join('')}</div>`:''}
       ${contactWindows(o)}
     `;
-    document.querySelector('footer').textContent = 'Объект компании ' + (o.company==='zelege'?'Zelege':'Kampika');
+    document.querySelector('footer').textContent = 'Объект компании ' + (o.display_name || (o.company==='zelege'?'Zelege':'Kampika'));
+    // Сигнал вовлечённости: считаем одно открытие на сессию (throttle клиентом).
+    if(!sessionStorage.getItem('tev_'+token)){ sb.rpc('log_portal_view',{ token }); sessionStorage.setItem('tev_'+token,'1'); }
     document.querySelectorAll('.ph img, .gallery img').forEach(img=> img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.full; document.getElementById('lb').classList.add('open'); });
     wireTimelapse();
     const rb=document.getElementById('roadmapBtn'), rbox=document.getElementById('roadmapBox');

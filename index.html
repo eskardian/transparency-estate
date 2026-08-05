@@ -413,6 +413,10 @@
     $('panel').classList.add('open');
     $('pCover').src = o.cover_url||'icon.svg';
     const feed = (o.feed_entries||[]).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const vc=o.view_count||0, razWord=(d=>d===1&&(vc%100)!==11?'раз':(d>=2&&d<=4&&!((vc%100)>=12&&(vc%100)<=14))?'раза':'раз')(vc%10);
+    const engHtml = vc
+      ? `<div class="paddr">👁 клиент открывал портал ${vc} ${razWord} · последний раз ${relDate(o.last_viewed_at)}</div>`
+      : `<div class="paddr" style="color:var(--muted)">👁 клиент ещё не открывал портал</div>`;
     $('pBody').innerHTML = `
       <h2>${esc(o.name)}</h2>
       <div class="pmeta"><span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span> · обновлено ${relDate(o.updated_at)}</div>
@@ -422,6 +426,7 @@
       <div class="weather" id="pWeather"></div>
       ${o.manager?`<div class="paddr">👤 ${esc(o.manager)}${o.phone?` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>`:''}</div>`:''}
       ${o.due_date?`<div class="paddr" style="${dueOverdue(o.due_date)?'color:#b4453a':''}">🗓 срок ${new Date(o.due_date).toLocaleDateString('ru-RU')}${dueOverdue(o.due_date)?' · просрочено':''}</div>`:''}
+      ${engHtml}
       <div class="routes">
         <a class="ya" href="${routeYandex(o.lat,o.lon)}" target="_blank">Маршрут · Яндекс</a>
         <a class="gis" href="${route2gis(o.lat,o.lon)}" target="_blank">2ГИС</a>
@@ -971,24 +976,50 @@
     const { data, error } = await sb.from('companies').select('*').order('slug');
     const box=$('companiesBox'); if(!box) return;
     if(error){ box.innerHTML=`<div class="team-row">Не загрузились компании — потяни обновить. (${esc(error.message)})</div>`; return; }
+    const ist='flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px';
     box.innerHTML = (data||[]).map(c=>`
       <div class="team-row" data-slug="${esc(c.slug)}" style="align-items:stretch;flex-direction:column;gap:7px">
         <b>${esc(c.name)}</b>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input class="c-tg" placeholder="@поддержка в Telegram" value="${esc(c.support_tg||'')}" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px">
-          <input class="c-url" placeholder="ссылка на форму/сайт (необяз.)" value="${esc(c.support_url||'')}" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px">
+          <input class="c-tg" placeholder="@поддержка в Telegram" value="${esc(c.support_tg||'')}" style="${ist}">
+          <input class="c-url" placeholder="ссылка на форму/сайт (необяз.)" value="${esc(c.support_url||'')}" style="${ist}">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:8px">
+          <span style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;width:100%">Бренд на портале клиента</span>
+          <input class="c-name" placeholder="Имя студии (напр. Kampika)" value="${esc(c.display_name||'')}" style="${ist}">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Цвет
+            <input class="c-color" type="color" value="${esc(c.brand_color||'#6b7257')}" style="width:38px;height:32px;padding:0;border:1px solid var(--line);border-radius:7px;background:none">
+          </label>
+          <img class="c-logo-prev" src="${esc(c.logo_url||'')}" alt="" style="height:30px;max-width:110px;object-fit:contain;${c.logo_url?'':'display:none'}">
+          <label class="btn ghost" style="cursor:pointer">Логотип<input class="c-logo" type="file" accept="image/*" hidden></label>
           <button class="btn c-save">Сохранить</button>
         </div>
       </div>`).join('') || '<div class="team-row">Компаний нет.</div>';
     box.querySelectorAll('.team-row[data-slug]').forEach(row=>{
-      row.querySelector('.c-save').onclick=()=> saveCompany(row.dataset.slug,
-        row.querySelector('.c-tg').value.trim().replace(/^@/,''), row.querySelector('.c-url').value.trim());
+      let logoUrl = (data.find(c=>c.slug===row.dataset.slug)||{}).logo_url || null;
+      const prev=row.querySelector('.c-logo-prev');
+      row.querySelector('.c-logo').onchange=async e=>{
+        const f=e.target.files[0]; if(!f) return;
+        toast('Загружаю логотип…');
+        const url=await uploadPhoto(f,'branding'); if(!url) return;
+        logoUrl=url; prev.src=url; prev.style.display='';
+      };
+      row.querySelector('.c-save').onclick=()=> saveCompany(row.dataset.slug, {
+        support_tg: row.querySelector('.c-tg').value.trim().replace(/^@/,''),
+        support_url: row.querySelector('.c-url').value.trim(),
+        display_name: row.querySelector('.c-name').value.trim(),
+        brand_color: row.querySelector('.c-color').value,
+        logo_url: logoUrl,
+      });
     });
   }
-  async function saveCompany(slug, tg, url){
-    const { error } = await sb.from('companies').update({ support_tg:tg||null, support_url:url||null }).eq('slug',slug);
+  async function saveCompany(slug, f){
+    const { error } = await sb.from('companies').update({
+      support_tg:f.support_tg||null, support_url:f.support_url||null,
+      display_name:f.display_name||null, brand_color:f.brand_color||null, logo_url:f.logo_url||null,
+    }).eq('slug',slug);
     if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
-    toast('Контакты компании сохранены');
+    toast('Компания сохранена');
   }
 
   async function loadTeam(){

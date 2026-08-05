@@ -16,6 +16,18 @@
     .care-badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; color:#5a7043; background:#f2f7ec; border:1px solid #cfe0c2; }
     .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 12px; }
 
+    /* White-label: студийная шапка */
+    .brand{ display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 0 4px; }
+    .brand-logo{ max-height:34px; max-width:150px; object-fit:contain; }
+    .brand-name{ font-weight:600; font-size:16px; letter-spacing:.3px; color:var(--ink); }
+
+    /* Режим ухода после сдачи */
+    .care-guide{ background:#f2f7ec; border:1px solid #cfe0c2; border-radius:14px; padding:16px 18px; margin:14px 0 4px; }
+    .care-guide .cg-head{ font-weight:600; font-size:15px; color:#4d6a39; margin-bottom:10px; }
+    .care-guide .cg-list{ margin:0; padding-left:18px; }
+    .care-guide .cg-list li{ font-size:14px; line-height:1.5; margin-bottom:6px; }
+    .care-guide .cg-foot{ font-size:13px; color:var(--muted); margin-top:10px; }
+
     /* прогресс по этапам */
     .stages{ display:flex; gap:3px; margin:14px 0 6px; }
     .stages .seg{ flex:1; height:6px; border-radius:3px; background:var(--line); }
