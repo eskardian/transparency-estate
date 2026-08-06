@@ -21,7 +21,7 @@
 <body>
   <!-- ВХОД -->
   <div id="auth">
-    <div class="card">
+    <div class="card" id="authCard">
       <h1>Transparency Estate</h1>
       <p>Карта объектов</p>
       <input id="email" type="email" placeholder="Почта" autocomplete="email">
@@ -30,6 +30,17 @@
       <button class="btn ghost" id="signup" style="width:100%;margin-top:8px">Создать аккаунт</button>
       <div class="msg" id="msg"></div>
       <a id="maglink">Войти по ссылке на почту</a>
+      <a id="toReg" style="display:block;margin-top:10px">Завести компанию для студии</a>
+    </div>
+    <div class="card" id="regCard" style="display:none">
+      <h1>Начать работу</h1>
+      <p>14 дней бесплатно, до 3 объектов. Карта не нужна.</p>
+      <input id="regCo" placeholder="Название компании">
+      <input id="regEmail" type="email" placeholder="Рабочая почта" autocomplete="email">
+      <input id="regPass" type="password" placeholder="Пароль · от 8 символов" autocomplete="new-password">
+      <button class="btn" id="regCreate" style="width:100%">Создать компанию</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px">Продолжая, вы принимаете условия использования и политику обработки данных.</div>
+      <a id="toLogin" style="display:block;margin-top:14px">Уже есть аккаунт — войти</a>
     </div>
   </div>
 
@@ -50,6 +61,7 @@
         <button class="btn ghost" id="acctBtn" title="Аккаунт">⋯</button>
         <div class="acct-menu" id="acctMenu">
           <div class="acct-email"><b id="whoEmail"></b> <span class="admin-tag" id="adminTag" style="display:none">админ</span></div>
+          <button id="profileBtn">Профиль</button>
           <button id="adminBtn" style="display:none">Админ-панель</button>
           <button id="pwBtn">Пароль для входа</button>
           <button id="logout">Выйти</button>
@@ -1100,7 +1112,7 @@
   // меню аккаунта (⋯) — открыть/закрыть + закрытие по клику вне и по выбору пункта
   $('acctBtn').onclick = e=>{ e.stopPropagation(); $('acctMenu').classList.toggle('open'); };
   document.addEventListener('click', e=>{ if(!e.target.closest('.acct')) $('acctMenu').classList.remove('open'); });
-  ['adminBtn','pwBtn','logout'].forEach(id=> $(id).addEventListener('click', ()=> $('acctMenu').classList.remove('open')));
+  ['profileBtn','adminBtn','pwBtn','logout'].forEach(id=> $(id).addEventListener('click', ()=> $('acctMenu').classList.remove('open')));
 
   // ───────────────────────── Уведомления (новые отчёты с прошлого визита) ─────────────────────────
   let lastSeen=null;
@@ -1152,6 +1164,7 @@
     // профиль и готовность карты — параллельно (оба ждут сеть, незачем по очереди)
     const ymapsReady = new Promise(r=> ymaps.ready(r));
     const { data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+    window.__me = prof || {};
     isAdmin = !!(prof && prof.is_admin);
     myCompany = prof ? prof.company : null;
     isSuper = isAdmin && !myCompany;
@@ -1211,6 +1224,11 @@
   $('password').onkeydown = e=>{ if(e.key==='Enter') $('login').click(); };
   $('email').onkeydown = e=>{ if(e.key==='Enter') $('password').focus(); };
 
+  // Экран регистрации компании (7e) — пока только вёрстка; открытый signup на боевом бэкенде выключен.
+  $('toReg').onclick = ()=>{ $('authCard').style.display='none'; $('regCard').style.display=''; };
+  $('toLogin').onclick = ()=>{ $('regCard').style.display='none'; $('authCard').style.display=''; };
+  $('regCreate').onclick = ()=> toast('Регистрация новых компаний скоро — пока доступ выдаёт администратор');
+
   // Задать/сменить пароль (для уже вошедших — Иван ставит пароль один раз)
   function setPasswordModal(){
     openModal(`<h3>Пароль для входа</h3>
@@ -1227,6 +1245,45 @@
   }
   $('pwBtn').onclick = setPasswordModal;
   $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+
+  // Профиль и уведомления (экран 7f). Своё имя/телефон/настройки — через безопасный RPC update_my_profile.
+  function profileModal(){
+    const me = window.__me || {};
+    const role = (me.is_admin && !me.company) ? 'супер-админ' : me.is_admin ? 'админ' : 'менеджер';
+    const sub = [role, me.company?companyLabel(me.company):''].filter(Boolean).join(' · ');
+    const n = me.notif || {};
+    const on = k => (n[k] !== false); // по умолчанию включено, пока явно не выключили
+    const row = (k,label) => `<label class="accrow" style="cursor:pointer"><span>${label}</span>
+      <input type="checkbox" data-nk="${k}" ${on(k)?'checked':''} style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer"></label>`;
+    openModal(`<h3>Профиль</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 18px">${esc(currentUser?.email||'')}${sub?' · '+esc(sub):''}</p>
+      <div class="field"><label>Имя</label><input id="pfName" value="${esc(me.full_name||'')}" placeholder="Как вас зовут"></div>
+      <div class="field"><label>Телефон для клиентов</label><input id="pfPhone" value="${esc(me.client_phone||'')}" placeholder="+7 900 000-00-00">
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Клиент видит его в портале, в блоке «Связаться».</div></div>
+      <div class="adm-sec" style="margin:22px 0 6px">Уведомления</div>
+      ${row('pending','Отчёт ждёт согласования')}
+      ${row('viewed','Клиент открыл портал')}
+      ${row('deadline','Срок этапа истекает через 3 дня')}
+      ${row('weekly','Сводка за неделю на почту')}
+      <div class="mactions" style="justify-content:space-between;margin-top:20px">
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" id="pfPw">Сменить пароль</button>
+          <button class="btn ghost" id="pfOut">Выйти</button>
+        </div>
+        <button class="btn" id="pfSave">Сохранить</button>
+      </div>`);
+    $('pfPw').onclick = ()=>{ closeModal(); setPasswordModal(); };
+    $('pfOut').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+    $('pfSave').onclick = async ()=>{
+      const notif = {}; document.querySelectorAll('#modal [data-nk]').forEach(c=> notif[c.dataset.nk]=c.checked);
+      const p_name = $('pfName').value.trim()||null, p_phone = $('pfPhone').value.trim()||null;
+      const { error } = await sb.rpc('update_my_profile', { p_name, p_phone, p_notif:notif });
+      if(error){ toast('Не сохранилось — попробуй ещё раз. ('+error.message+')'); return; }
+      window.__me = { ...me, full_name:p_name, client_phone:p_phone, notif };
+      closeModal(); toast('Профиль сохранён');
+    };
+  }
+  $('profileBtn').onclick = profileModal;
 
   // boot ровно один раз: и при загрузке с сохранённой сессией, и сразу после свежего входа
   let booted=false;
