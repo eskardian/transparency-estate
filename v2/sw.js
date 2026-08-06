@@ -1,6 +1,6 @@
 // ponytail: оболочка кэшируется для офлайна. HTML — network-first (свежая версия онлайн,
 // кэш только если сети нет), статика — cache-first. Данные/карта всегда из сети.
-const CACHE = 'te-v2-2';
+const CACHE = 'te-v2-3';
 const SHELL = ['./', './index.html', './polish.css', './vibe.js', './manifest.json', './icon.svg',
   './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
@@ -23,6 +23,13 @@ self.addEventListener('fetch', e => {
       return r;
     }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html'))));
   } else {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+    // stale-while-revalidate: отдать из кэша сразу, но обновить кэш свежим ответом в фоне
+    e.respondWith(caches.match(e.request).then(cached => {
+      const fetching = fetch(e.request).then(r => {
+        if (r && r.ok) caches.open(CACHE).then(c => c.put(e.request, r.clone()));
+        return r;
+      }).catch(() => cached);
+      return cached || fetching;
+    }));
   }
 });
