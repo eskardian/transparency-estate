@@ -1235,7 +1235,13 @@
   sb.auth.onAuthStateChange((_e,session)=>{ if(session) bootOnce(); });
 
   // PWA
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator){
+    // самолечение: если страница уже под контролем SW и приходит новый — перезагрузиться один раз,
+    // чтобы подхватить свежие CSS/JS (иначе новый маркап + старый кэш стилей = «поплывшая» вёрстка)
+    if(navigator.serviceWorker.controller){ let reloaded=false;
+      navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(reloaded) return; reloaded=true; location.reload(); }); }
+    navigator.serviceWorker.register('sw.js').then(r=> r&&r.update()).catch(()=>{});
+  }
   </script>
 </body>
 </html>
