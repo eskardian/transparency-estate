@@ -461,6 +461,7 @@
         ${canManage(o)?'<button class="btn ghost" id="roadmapObj">План работ</button>':''}
         ${canManage(o)?`<button class="btn ghost" id="careObj">${o.care?'Снять с ухода':'На уход'}</button>`:''}
         ${canManage(o)?'<button class="btn ghost" id="tlObj">Таймлапс</button>':''}
+        ${canManage(o)?'<button class="btn ghost" id="bankObj">Банк контента</button>':''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
@@ -515,6 +516,7 @@
     if($('roadmapObj')) $('roadmapObj').onclick = ()=> roadmapModal(o);
     if($('careObj')) $('careObj').onclick = ()=> toggleCare(o);
     if($('tlObj')) $('tlObj').onclick = ()=> timelapseModal(o);
+    if($('bankObj')) $('bankObj').onclick = ()=> contentBankModal(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -706,6 +708,59 @@
       const { error } = await sb.from('objects').update({ stage_dates:dates }).eq('id',o.id);
       if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
       o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
+    };
+  }
+  // Банк контента (6b/7c): все фото объекта из отчётов, фильтры + мультивыбор.
+  // Реюз моделей: «Открыть клиенту» = одобрить отчёты выбранных фото; «В таймлапс» = добавить в objects.timelapse.
+  function contentBankModal(o){
+    const photos=[];
+    (o.feed_entries||[]).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+      .forEach(f=>(f.photos||[]).forEach(p=>photos.push({url:p,date:f.created_at,eid:f.id,state:f.client_state})));
+    if(!photos.length){ toast('В отчётах объекта пока нет фото'); return; }
+    const tlUrls=new Set(((o.timelapse&&o.timelapse.frames)||[]).map(fr=>fr.url||fr));
+    photos.forEach(p=> p.inTL=tlUrls.has(p.url));
+    let filter='all'; const sel=new Set();
+    openModal(`<h3>Банк контента · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 12px">${photos.length} фото из отчётов. Выберите кадры → откройте клиенту или добавьте в таймлапс.</p>
+      <div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+      <div id="cbGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:44vh;overflow:auto"></div>
+      <div id="cbBar" style="display:none;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+        <span id="cbCount" style="flex:1;font-size:13px;color:var(--muted)"></span>
+        <button class="btn ghost" id="cbClient">Открыть клиенту</button>
+        <button class="btn" id="cbTL">В таймлапс</button>
+      </div>
+      <div class="mactions"><button class="btn ghost" id="cbClose">Закрыть</button></div>`);
+    const counts=()=>({all:photos.length, client:photos.filter(p=>p.state==='approved').length, tl:photos.filter(p=>p.inTL).length, draft:photos.filter(p=>p.state!=='approved').length});
+    const match=p=> filter==='all'||(filter==='client'&&p.state==='approved')||(filter==='tl'&&p.inTL)||(filter==='draft'&&p.state!=='approved');
+    const drawBar=()=>{ const bar=$('cbBar'); if(sel.size){ bar.style.display='flex'; $('cbCount').textContent='Выбрано '+sel.size+' фото'; } else bar.style.display='none'; };
+    const draw=()=>{
+      const c=counts();
+      $('cbFilters').innerHTML=[['all','Всё',c.all],['client','Видно клиенту',c.client],['tl','В таймлапсе',c.tl],['draft','Черновые',c.draft]].map(([k,l,n])=>`<button class="chip ${filter===k?'active':''}" data-k="${k}">${l} ${n}</button>`).join('');
+      $('cbFilters').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ filter=b.dataset.k; draw(); });
+      $('cbGrid').innerHTML=photos.map((p,i)=> match(p)?`<div class="cbcell" data-i="${i}" style="position:relative;cursor:pointer">
+        <img src="${esc(p.url)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;${sel.has(i)?'outline:3px solid var(--accent);outline-offset:-3px':''}">
+        <div style="position:absolute;top:5px;left:5px;display:flex;gap:4px">${p.state==='approved'?'<span style="background:var(--accent);color:#fff;font-size:9px;padding:2px 5px;border-radius:6px">клиент</span>':''}${p.inTL?'<span style="background:rgba(30,31,28,.72);color:#fff;font-size:9px;padding:2px 5px;border-radius:6px">таймлапс</span>':''}</div>
+        ${sel.has(i)?'<div style="position:absolute;top:5px;right:5px;background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px">✓</div>':''}
+      </div>`:'').join('');
+      $('cbGrid').querySelectorAll('.cbcell').forEach(el=>el.onclick=()=>{ const i=+el.dataset.i; sel.has(i)?sel.delete(i):sel.add(i); draw(); });
+      drawBar();
+    };
+    draw();
+    $('cbClose').onclick=closeModal;
+    $('cbClient').onclick=async()=>{
+      const eids=[...new Set([...sel].map(i=>photos[i].eid))];
+      const { error } = await sb.from('feed_entries').update({client_state:'approved'}).in('id',eids);
+      if(error){ toast('Ошибка: '+error.message); return; }
+      closeModal(); toast(eids.length>1?'Отчёты открыты клиенту':'Открыто клиенту'); reload();
+    };
+    $('cbTL').onclick=async()=>{
+      const frames=((o.timelapse&&o.timelapse.frames)||[]).map(fr=> typeof fr==='string'?{url:fr,date:null}:fr);
+      const have=new Set(frames.map(f=>f.url));
+      [...sel].map(i=>photos[i]).forEach(p=>{ if(!have.has(p.url)){ frames.push({url:p.url,date:p.date}); have.add(p.url); } });
+      frames.sort((a,b)=> new Date(a.date||0)-new Date(b.date||0));
+      const { error } = await sb.from('objects').update({ timelapse:{ frames, speed:(o.timelapse&&o.timelapse.speed)||'normal' } }).eq('id',o.id);
+      if(error){ toast('Ошибка: '+error.message); return; }
+      closeModal(); toast('Добавлено в таймлапс'); reload();
     };
   }
   // Сборка таймлапса (7g): выбор кадров/порядок/скорость. Конфиг → objects.timelapse (null = авто).
