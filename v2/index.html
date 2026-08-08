@@ -894,16 +894,27 @@
     if(!items.length){ box.innerHTML='<div class="empty">Пока ни одного отчёта. Как появятся — увидишь здесь.</div>'; return; }
     box.innerHTML = '<div class="act-head">Что обновилось — свежее сверху</div>' + items.map(({o,f})=>{
       const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
+      const cs=f.client_state;
+      const manage = canManage(o) && cs!==undefined;
+      const csLabel = cs==='approved'?'клиент видит':cs==='hidden'?'скрыто':'ждёт согласования';
       return `<div class="act-item" data-id="${o.id}">
         <img src="${thumb}">
-        <div>
-          <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
+        <div style="flex:1;min-width:0">
+          <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}${manage?`<span class="fvis ${esc(cs)}" style="margin:0">${csLabel}</span>`:''}</div>
           ${f.body?`<div class="ai-body">${esc(f.body)}</div>`:''}
           <div class="ai-time">${relDate(f.created_at)}</div>
+          ${manage?`<div style="margin-top:8px"><button class="fvis-btn" data-fid="${f.id}" data-to="${cs==='approved'?'hidden':'approved'}">${cs==='approved'?'Скрыть от клиента':'Показать клиенту'}</button></div>`:''}
         </div>
       </div>`;
     }).join('');
     box.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ setView('map'); selectObject(+el.dataset.id); });
+    box.querySelectorAll('.fvis-btn').forEach(b=> b.onclick=async(e)=>{
+      e.stopPropagation();
+      const { error } = await sb.from('feed_entries').update({ client_state:b.dataset.to }).eq('id',b.dataset.fid);
+      if(error){ toast('Не вышло — попробуй ещё раз'); return; }
+      toast(b.dataset.to==='approved'?'Клиент теперь видит отчёт':'Скрыто от клиента');
+      await reload();
+    });
   }
   // Календарь: вехи из плановых дат этапов (текущий и впереди) + сроки сдачи. Прошедшие этапы и завершённые объекты не показываем.
   const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -988,11 +999,28 @@
       <div class="card-co"><div class="big-num">${reports7}</div><div class="sub">отчётов с объектов за 7 дней</div></div>`;
   }
 
+  // Тарифы (6e) — информационный раздел; биллинг пока не подключён.
+  function tariffsSection(){
+    const plans=[
+      {n:'Пробный', p:'14 дней бесплатно', f:['до 3 объектов','1 пользователь','карта, портал, отчёты'], cur:!isSuper},
+      {n:'Базовый', p:'для одной студии', f:['до 20 объектов','до 5 в команде','эфир, документы, уход'], cur:false},
+      {n:'Про', p:'для сети', f:['без лимита объектов','вся команда','white-label, приоритетная поддержка'], cur:isSuper},
+    ];
+    return `<div class="cards" style="grid-template-columns:repeat(3,1fr)">${plans.map(pl=>`
+      <div class="card-co" ${pl.cur?'style="border-color:var(--accent)"':''}>
+        <h3>${pl.n} ${pl.cur?'<span class="admin-tag" style="vertical-align:middle">текущий</span>':''}</h3>
+        <div class="sub">${pl.p}</div>
+        <div class="mini" style="flex-direction:column;gap:6px;align-items:flex-start;margin-top:12px">${pl.f.map(x=>`<span style="font-size:12.5px;color:var(--ink)">· ${x}</span>`).join('')}</div>
+      </div>`).join('')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">Оплата и смена тарифа подключаются позже — сейчас лимиты не применяются.</div>`;
+  }
   function renderAdmin(){
     $('admin').innerHTML = `<div class="adm-wrap">
       <div class="adm-top"><h2>Админ-панель</h2><button class="adm-close" id="admClose">✕</button></div>
       <div class="adm-sec">Сводка</div>
       ${adminSummary()}
+      <div class="adm-sec">Тарифы</div>
+      ${tariffsSection()}
       <div class="adm-sec">Компании · контакт поддержки для клиентов</div>
       <div id="companiesBox" class="team"><div class="team-row">Загрузка…</div></div>
       <div class="adm-sec">Команда</div>
