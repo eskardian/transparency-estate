@@ -1,6 +1,6 @@
 // ponytail: оболочка кэшируется для офлайна. HTML — network-first (свежая версия онлайн,
 // кэш только если сети нет), статика — cache-first. Данные/карта всегда из сети.
-const CACHE = 'te-v2-9';
+const CACHE = 'te-v2-10';
 const SHELL = ['./', './index.html', './polish.css', './vibe.js', './manifest.json', './icon.svg',
   './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 

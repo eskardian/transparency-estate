@@ -332,24 +332,34 @@
     const weekAgo=Date.now()-7*86400000;
     const week = scope.reduce((n,o)=>n+(o.feed_entries||[]).filter(f=>new Date(f.created_at).getTime()>weekAgo).length,0);
     const care = scope.filter(o=>o.care);
-    return { pending, overdue, week, care };
+    // «Затихли»: не завершён и без отчёта ≥ QUIET_DAYS дней (нет фото/новостей → клиент ждёт)
+    const QUIET_DAYS=10;
+    const daysQuiet=o=>{ const fs=o.feed_entries||[];
+      const last = fs.length ? Math.max(...fs.map(f=>new Date(f.created_at).getTime())) : new Date(o.created_at||0).getTime();
+      return Math.floor((Date.now()-last)/86400000); };
+    const quiet = scope.filter(o=> o.status!=='Завершён' && daysQuiet(o)>=QUIET_DAYS)
+      .map(o=>({o, days:daysQuiet(o)})).sort((a,b)=>b.days-a.days);
+    return { pending, overdue, week, care, quiet };
   }
   function renderPulse(){
     const box=$('pulse'); if(!box) return;
     if(!isAdmin){ box.style.display='none'; return; }
     box.style.display='block';
-    const { pending, overdue, week, care } = pulseData();
+    const { pending, overdue, week, care, quiet } = pulseData();
     box.innerHTML = `
       <div class="pulse-tiles">
         <button class="pulse-tile ${pending.length?'alert':''}" id="pulsePending"><b>${pending.length}</b><span>ждёт согласования</span></button>
         <button class="pulse-tile ${overdue.length?'warn':''}" id="pulseOverdue"><b>${overdue.length}</b><span>просрочено</span></button>
         <div class="pulse-tile"><b>${week}</b><span>за неделю</span></div>
       </div>
+      ${quiet.length?`<button class="pulse-care" id="pulseQuiet" style="background:var(--warn-tint);color:var(--warn)">Затихли: ${quiet.length} · давно без отчёта, клиент ждёт новостей</button>`:''}
       ${care.length?`<button class="pulse-care" id="pulseCare">На уходе: ${care.length} · пора ${SEASON_ADJ[curSeason()]} ухода</button>`:''}`;
     $('pulsePending').onclick=()=> pulseModal('Ждёт согласования',
       'Отчёты, которых клиент пока не видит. Тап — открыть объект и решить.', pending.map(x=>({o:x.o,f:x.f})));
     $('pulseOverdue').onclick=()=> pulseModal('Просрочено',
       'Этап или срок прошёл, объект не завершён.', overdue.map(o=>({o})));
+    if($('pulseQuiet')) $('pulseQuiet').onclick=()=> pulseModal('Затихли',
+      'Давно без отчёта — клиент давно не видел новостей. Тап — открыть объект и снять отчёт.', quiet.map(q=>({o:q.o, note:`тихо ${q.days} дн.`})));
     if($('pulseCare')) $('pulseCare').onclick=()=> careModal(care);
   }
   // Список объектов на уходе + чек-лист текущего сезона
@@ -369,9 +379,10 @@
   function pulseModal(title, sub, rows){
     openModal(`<h3>${esc(title)}</h3>
       <p style="font-size:13px;color:var(--muted);margin-top:0">${esc(sub)}</p>
-      ${rows.length? rows.map(({o,f})=>{
+      ${rows.length? rows.map((row)=>{
+        const {o,f}=row;
         const thumb=(f&&f.photos&&f.photos[0])||o.cover_url||'icon.svg';
-        const line = f ? (f.body?esc(f.body):'') : `срок ${o.due_date?new Date(o.due_date).toLocaleDateString('ru-RU'):((o.stage_dates||{})[o.status]?new Date((o.stage_dates||{})[o.status]).toLocaleDateString('ru-RU'):'—')}`;
+        const line = f ? (f.body?esc(f.body):'') : (row.note?esc(row.note):`срок ${o.due_date?new Date(o.due_date).toLocaleDateString('ru-RU'):((o.stage_dates||{})[o.status]?new Date((o.stage_dates||{})[o.status]).toLocaleDateString('ru-RU'):'—')}`);
         return `<div class="act-item pulse-row" data-id="${o.id}" style="cursor:pointer;border:1px solid var(--line);border-radius:9px;margin-bottom:8px">
           <img src="${thumb}">
           <div><div class="ai-obj">${esc(o.name)} <span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span></div>
