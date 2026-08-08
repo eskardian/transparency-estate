@@ -237,11 +237,16 @@
     #lightbox img{ max-width:92vw; max-height:92vh; border-radius:8px; }
 
     @media(max-width:640px){
-      .hmenu{ display:block; }
+      .hmenu{ display:block; flex:0 0 auto; }
       #sidebar{ position:absolute; top:0; left:0; height:100%; z-index:30; transform:translateX(-105%); transition:transform .25s; box-shadow:var(--shadow); }
       #sidebar.open{ transform:none; }
       #activity,#content,#calendar{ left:0; }
-      .logo,.who{ display:none; }
+      .logo,.who,header .spacer{ display:none; }
+      /* вкладки сжимаются и скроллятся, колокольчик и аккаунт всегда видны */
+      .viewtabs{ flex:1 1 auto; min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+      .viewtabs::-webkit-scrollbar{ display:none; }
+      .vt{ white-space:nowrap; }
+      .bell,.acct,.acctbtn{ flex:0 0 auto; }
     }
   
 
