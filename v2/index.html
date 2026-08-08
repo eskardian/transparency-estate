@@ -42,6 +42,15 @@
       <div style="font-size:12px;color:var(--muted);margin-top:12px">Продолжая, вы принимаете условия использования и политику обработки данных.</div>
       <a id="toLogin" style="display:block;margin-top:14px">Уже есть аккаунт — войти</a>
     </div>
+    <div class="card" id="inviteCard" style="display:none">
+      <h1>Приглашение</h1>
+      <p id="invLead">Вас приглашают в команду</p>
+      <div style="font-size:13px;color:var(--muted);margin:10px 0 0">Роль — прораб: снимаете отчёты и загружаете фото. Согласование остаётся за менеджером.</div>
+      <input id="invEmail" type="email" placeholder="Ваша почта" readonly style="opacity:.7">
+      <input id="invPass" type="password" placeholder="Придумайте пароль" autocomplete="new-password">
+      <button class="btn" id="invAccept" style="width:100%">Принять и войти</button>
+      <a id="invDecline" style="display:block;margin-top:14px">Это не я — отклонить приглашение</a>
+    </div>
   </div>
 
   <!-- ПРИЛОЖЕНИЕ -->
@@ -291,8 +300,12 @@
   }
   function renderSidebar(){
     const list=$('list'); const vis=visibleObjects();
-    if(!objects.length){ list.innerHTML='<div class="empty">Пока пусто.<br>Добавь первый объект — и он появится на карте.</div>'; return; }
-    if(!vis.length){ list.innerHTML='<div class="empty">Ничего не нашлось. Попробуй изменить фильтр или поиск.</div>'; return; }
+    if(!objects.length){ list.innerHTML='<div class="empty"><b style="display:block;font-size:19px;color:var(--ink);letter-spacing:-.02em;margin-bottom:8px">Пока ни одного объекта</b>Добавьте первый — по адресу или точкой на карте. Клиент получит ссылку сразу после первого отчёта.</div>'; return; }
+    if(!vis.length){
+      list.innerHTML='<div class="empty"><b style="display:block;font-size:19px;color:var(--ink);letter-spacing:-.02em;margin-bottom:8px">Ничего не нашли</b>Измените запрос или сбросьте фильтры.<div style="margin-top:14px"><button class="btn ghost" id="resetFilters">Сбросить фильтры</button></div></div>';
+      $('resetFilters').onclick=()=>{ searchText=''; filterStatus=null; $('search').value=''; renderFilters(); renderSidebar(); };
+      return;
+    }
     list.innerHTML = vis.map(o=>`
       <div class="row ${o.id===selectedId?'sel':''}" data-id="${o.id}">
         <img src="${o.cover_url||'icon.svg'}" alt="">
@@ -623,8 +636,9 @@
     const editing=!!o;
     openModal(`
       <h3>${editing?'Редактировать объект':'Новый объект'}</h3>
+      ${editing?`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin:-8px 0 14px">создан ${new Date(o.created_at||Date.now()).toLocaleDateString('ru-RU')}</div>`:''}
+      <div class="field"><label>Этап и статус</label><select id="fStatus">${STATUSES.map((s,i)=>`<option value="${esc(s.label)}" ${editing&&o.status===s.label?'selected':''}>Этап ${i+1} · ${s.label}</option>`).join('')}</select></div>
       <div class="field"><label>Название</label><input id="fName" value="${editing?esc(o.name):''}"></div>
-      <div class="field"><label>Статус</label><select id="fStatus">${STATUSES.map(s=>`<option ${editing&&o.status===s.label?'selected':''}>${s.label}</option>`).join('')}</select></div>
       ${isSuper?`<div class="field"><label>Компания</label><select id="fCompany">${COMPANIES.map(c=>`<option value="${c.id}" ${(editing?o.company===c.id:companyFilter===c.id)?'selected':''}>${c.label}</option>`).join('')}</select></div>`:''}
       <div class="field"><label>Адрес (необязательно)</label><input id="fAddr" value="${editing?esc(o.address||''):esc(prefill&&prefill.address||'')}"></div>
       <div class="field"><label>Ответственный</label><input id="fManager" value="${editing?esc(o.manager||''):''}"></div>
@@ -638,8 +652,13 @@
         <button class="btn ghost" id="fCancel">Отмена</button>
         <button class="btn" id="fSave">${editing?'Сохранить':'Создать'}</button>
       </div>
+      ${editing&&isAdmin?`<div style="border-top:1px solid var(--line);margin-top:20px;padding-top:16px;display:flex;align-items:center;gap:12px">
+        <div style="flex:1;font-size:12.5px;color:var(--muted)">Удаление убирает объект с карты, вся история пропадает, ссылка клиента перестаёт работать. Отменить нельзя.</div>
+        <button class="btn danger" id="fDelete" style="flex:0 0 auto">Удалить</button>
+      </div>`:''}
     `);
     $('fCancel').onclick=closeModal;
+    if($('fDelete')) $('fDelete').onclick=()=>{ closeModal(); deleteObject(o); };
     $('fSave').onclick=async()=>{
       const name=$('fName').value.trim(); if(!name){ toast('Впиши название объекта'); return; }
       $('fSave').disabled=true; $('fSave').textContent='…';
@@ -1228,6 +1247,16 @@
   $('toReg').onclick = ()=>{ $('authCard').style.display='none'; $('regCard').style.display=''; };
   $('toLogin').onclick = ()=>{ $('regCard').style.display='none'; $('authCard').style.display=''; };
   $('regCreate').onclick = ()=> toast('Регистрация новых компаний скоро — пока доступ выдаёт администратор');
+
+  // Приём приглашения (7e) — по ссылке ?invite=…&by=…&co=…&email=…; бэкенд приглашений пока не подключён.
+  const inviteParams = new URLSearchParams(location.search);
+  if(inviteParams.get('invite')){
+    $('authCard').style.display='none'; $('inviteCard').style.display='';
+    $('invLead').textContent = (inviteParams.get('by')||'Менеджер') + ' приглашает вас в ' + (inviteParams.get('co')||'команду');
+    if(inviteParams.get('email')) $('invEmail').value = inviteParams.get('email');
+  }
+  $('invAccept').onclick = ()=> toast('Приглашения скоро — пока доступ выдаёт администратор через «Доступы»');
+  $('invDecline').onclick = ()=>{ $('inviteCard').style.display='none'; $('authCard').style.display=''; };
 
   // Задать/сменить пароль (для уже вошедших — Иван ставит пароль один раз)
   function setPasswordModal(){
