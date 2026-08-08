@@ -460,6 +460,7 @@
         <button class="btn ghost" id="editObj">Редактировать</button>
         ${canManage(o)?'<button class="btn ghost" id="roadmapObj">План работ</button>':''}
         ${canManage(o)?`<button class="btn ghost" id="careObj">${o.care?'Снять с ухода':'На уход'}</button>`:''}
+        ${canManage(o)?'<button class="btn ghost" id="tlObj">Таймлапс</button>':''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
@@ -513,6 +514,7 @@
     $('editObj').onclick = ()=> objectForm(o);
     if($('roadmapObj')) $('roadmapObj').onclick = ()=> roadmapModal(o);
     if($('careObj')) $('careObj').onclick = ()=> toggleCare(o);
+    if($('tlObj')) $('tlObj').onclick = ()=> timelapseModal(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -704,6 +706,52 @@
       const { error } = await sb.from('objects').update({ stage_dates:dates }).eq('id',o.id);
       if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
       o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
+    };
+  }
+  // Сборка таймлапса (7g): выбор кадров/порядок/скорость. Конфиг → objects.timelapse (null = авто).
+  function timelapseModal(o){
+    const cand=[];
+    (o.feed_entries||[]).slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))
+      .forEach(f=>(f.photos||[]).forEach(p=>cand.push({url:p, date:f.created_at})));
+    if(cand.length<2){ toast('Нужно хотя бы 2 фото в отчётах, чтобы собрать таймлапс'); return; }
+    const saved=o.timelapse; let state, speed='normal';
+    if(saved && Array.isArray(saved.frames) && saved.frames.length){
+      const su=saved.frames.map(fr=>fr.url||fr);
+      state=saved.frames.map(fr=>({url:fr.url||fr, date:fr.date||null, on:true}));
+      cand.forEach(c=>{ if(!su.includes(c.url)) state.push({url:c.url,date:c.date,on:false}); });
+      speed=saved.speed||'normal';
+    } else state=cand.map(c=>({url:c.url,date:c.date,on:true}));
+    openModal(`<h3>Сборка таймлапса · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 14px">Выберите кадры и порядок — клиент увидит собранный ролик. Проверить можно кнопкой «Клиенту».</p>
+      <div class="field"><label>Скорость</label><select id="tlSpeed"><option value="slow">Медленно</option><option value="normal">Обычно</option><option value="fast">Быстро</option></select></div>
+      <div id="tlList" style="max-height:44vh;overflow:auto;margin:8px 0"></div>
+      <div class="mactions" style="justify-content:space-between">
+        <button class="btn ghost" id="tlAuto">Сбросить к авто</button>
+        <div style="display:flex;gap:8px"><button class="btn ghost" id="tlCancel">Отмена</button><button class="btn" id="tlSave">Сохранить</button></div>
+      </div>`);
+    $('tlSpeed').value=speed;
+    const listEl=$('tlList');
+    const draw=()=>{
+      listEl.innerHTML=state.map((s,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)">
+        <input type="checkbox" class="tlon" data-i="${i}" ${s.on?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+        <img src="${esc(s.url)}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;flex:0 0 auto;${s.on?'':'opacity:.4'}">
+        <span style="flex:1;font-family:var(--mono);font-size:11px;color:var(--muted)">${s.date?new Date(s.date).toLocaleDateString('ru-RU'):''}</span>
+        <button class="btn ghost tlup" data-i="${i}" style="padding:5px 9px" ${i===0?'disabled':''}>↑</button>
+        <button class="btn ghost tldn" data-i="${i}" style="padding:5px 9px" ${i===state.length-1?'disabled':''}>↓</button>
+      </div>`).join('');
+      listEl.querySelectorAll('.tlon').forEach(c=>c.onchange=()=>{ state[+c.dataset.i].on=c.checked; draw(); });
+      listEl.querySelectorAll('.tlup').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; [state[i-1],state[i]]=[state[i],state[i-1]]; draw(); });
+      listEl.querySelectorAll('.tldn').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; [state[i+1],state[i]]=[state[i],state[i+1]]; draw(); });
+    };
+    draw();
+    $('tlCancel').onclick=closeModal;
+    $('tlAuto').onclick=async()=>{ const {error}=await sb.from('objects').update({timelapse:null}).eq('id',o.id); if(error){toast('Ошибка: '+error.message);return;} closeModal(); toast('Таймлапс — снова автоматический'); reload(); };
+    $('tlSave').onclick=async()=>{
+      const frames=state.filter(s=>s.on).map(s=>({url:s.url,date:s.date}));
+      if(frames.length<2){ toast('Оставь хотя бы 2 кадра'); return; }
+      const { error } = await sb.from('objects').update({ timelapse:{ frames, speed:$('tlSpeed').value } }).eq('id',o.id);
+      if(error){ toast('Не сохранилось: '+error.message); return; }
+      closeModal(); toast('Таймлапс собран'); reload();
     };
   }
   // Переключить объект на сезонный уход / снять

@@ -144,20 +144,27 @@
   }
 
   // Таймлапс «как рос участок»: все фото ленты по хронологии, play + ползунок.
-  function timelapse(feed){
-    const chrono = feed.slice().reverse(); // RPC отдаёт desc → в хронологию
-    const frames = [];
-    chrono.forEach(f => (f.photos||[]).forEach(p => frames.push({url:p, date:f.created_at})));
+  function timelapse(feed, cfg){
+    let frames;
+    if(cfg && Array.isArray(cfg.frames) && cfg.frames.length >= 2){
+      frames = cfg.frames.map(fr => typeof fr==='string' ? {url:fr,date:null} : fr); // собрано менеджером (порядок задан)
+    } else {
+      const chrono = feed.slice().reverse(); // RPC отдаёт desc → в хронологию
+      frames = [];
+      chrono.forEach(f => (f.photos||[]).forEach(p => frames.push({url:p, date:f.created_at})));
+    }
     if(frames.length < 2) return '';
     window.__tlFrames = frames;
+    window.__tlSpeed = ({slow:1200, normal:750, fast:400})[cfg&&cfg.speed] || 750;
     const last = frames.length-1;
+    const dtxt = i => frames[i].date ? new Date(frames[i].date).toLocaleDateString('ru-RU') : '';
     return `<div class="sec">Как рос участок</div>
       <div class="tl">
         <img id="tlImg" src="${esc(frames[last].url)}" alt="прогресс">
         <div class="tl-ctl">
           <button id="tlPlay" class="tl-play" aria-label="Проиграть">▶</button>
           <input type="range" id="tlRange" min="0" max="${last}" value="${last}">
-          <span id="tlDate" class="tl-date">${new Date(frames[last].date).toLocaleDateString('ru-RU')}</span>
+          <span id="tlDate" class="tl-date">${dtxt(last)}</span>
         </div>
       </div>`;
   }
@@ -167,7 +174,7 @@
           dateEl=document.getElementById('tlDate'), play=document.getElementById('tlPlay');
     if(!range) return;
     frames.forEach(f=>{ const im=new Image(); im.src=f.url; }); // префетч для плавности
-    const show=i=>{ img.src=frames[i].url; dateEl.textContent=new Date(frames[i].date).toLocaleDateString('ru-RU'); range.value=i; };
+    const show=i=>{ img.src=frames[i].url; dateEl.textContent=frames[i].date?new Date(frames[i].date).toLocaleDateString('ru-RU'):''; range.value=i; };
     range.oninput=()=> show(+range.value);
     let timer=null;
     const stop=()=>{ if(timer){ clearInterval(timer); timer=null; } play.textContent='▶'; };
@@ -176,7 +183,7 @@
       play.textContent='⏸';
       let i = (+range.value>=frames.length-1) ? 0 : +range.value;
       show(i);
-      timer=setInterval(()=>{ i++; if(i>=frames.length){ stop(); return; } show(i); }, 750);
+      timer=setInterval(()=>{ i++; if(i>=frames.length){ stop(); return; } show(i); }, window.__tlSpeed||750);
     };
   }
 
@@ -258,7 +265,7 @@
       <button class="roadmap-btn" id="roadmapBtn">Показать план работ</button>
       <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
-      ${timelapse(feed)}
+      ${timelapse(feed, o.timelapse)}
       ${galleryHtml(feed)}
       <div class="sec">Ход работ</div>
       ${feed.length? feed.map(f=>`
