@@ -335,8 +335,9 @@
     // «Затихли»: не завершён и без отчёта ≥ QUIET_DAYS дней (нет фото/новостей → клиент ждёт)
     const QUIET_DAYS=10;
     const daysQuiet=o=>{ const fs=o.feed_entries||[];
-      const last = fs.length ? Math.max(...fs.map(f=>new Date(f.created_at).getTime())) : new Date(o.created_at||0).getTime();
-      return Math.floor((Date.now()-last)/86400000); };
+      const times = fs.map(f=>new Date(f.created_at).getTime()).filter(t=>t>0);
+      const base = times.length ? Math.max(...times) : new Date(o.updated_at||o.created_at||Date.now()).getTime();
+      return Math.floor((Date.now()-base)/86400000); };
     const quiet = scope.filter(o=> o.status!=='Завершён' && daysQuiet(o)>=QUIET_DAYS)
       .map(o=>({o, days:daysQuiet(o)})).sort((a,b)=>b.days-a.days);
     return { pending, overdue, week, care, quiet };
