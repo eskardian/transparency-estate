@@ -2,3 +2,6 @@ project_id = "pqmjulphghojlaijffty"
 
 [functions.weekly-digest]
 verify_jwt = false
+
+[functions.notify-dispatch]
+verify_jwt = false

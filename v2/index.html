@@ -230,10 +230,13 @@
   }
 
   // ───────────────────────── Загрузка данных ─────────────────────────
+  let pendingNotifs=[]; // client_notifications в статусе pending (ждут подтверждения менеджера)
   async function reload(){
     const { data, error } = await sb.from('objects').select('*, feed_entries(*, feed_reactions(emoji))').order('updated_at',{ascending:false});
     if(error){ toast('Не получилось загрузить данные — проверь связь и потяни обновить. ('+error.message+')'); return; }
     objects = data||[];
+    const { data:pn } = await sb.from('client_notifications').select('*, objects(name)').eq('state','pending').order('created_at',{ascending:false});
+    pendingNotifs = pn||[];
     renderMarkers(); renderFilters(); renderSidebar(); renderPulse(); updateBell();
     if($('activity').style.display==='block') renderActivity();
     if($('calendar').style.display==='block') renderCalendar();
@@ -1331,12 +1334,23 @@
     return items;
   }
   function updateBell(){
-    const n=newReports().length, b=$('bellBadge');
+    const n=newReports().length + pendingNotifs.length, b=$('bellBadge');
     if(n>0){ b.textContent=n>9?'9+':n; b.style.display='flex'; } else b.style.display='none';
   }
   function openBell(){
     const list=$('bellList'), items=newReports();
-    list.innerHTML = '<div class="bl-head">Новые отчёты</div>' + (items.length ? items.map(({o,f})=>{
+    const pend = pendingNotifs.map(p=>`
+      <div class="bl-pend" style="padding:12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px">
+        <div><div class="ai-obj">${esc(p.objects&&p.objects.name||'')} <span class="badge" style="background:var(--warn)">${esc(p.title||'')}</span></div>
+        <div class="ai-body">${esc(p.body||'')}</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn cn-send" data-id="${p.id}" style="flex:1;padding:8px">Отправить клиенту</button>
+          <button class="btn ghost cn-skip" data-id="${p.id}" style="flex:0 0 auto;padding:8px 12px">Не слать</button>
+        </div>
+      </div>`).join('');
+    list.innerHTML =
+      (pendingNotifs.length ? '<div class="bl-head">Ждут вашего подтверждения</div>' + pend : '') +
+      '<div class="bl-head">Новые отчёты</div>' + (items.length ? items.map(({o,f})=>{
       const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
       return `<div class="act-item" data-id="${o.id}"><img src="${thumb}"><div>
         <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
@@ -1344,6 +1358,11 @@
         <div class="ai-time">${relDate(f.created_at)}</div></div></div>`;
     }).join('') : '<div class="empty">Новых отчётов пока нет — как появятся, увидишь здесь.</div>');
     list.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ list.classList.remove('open'); setView('map'); selectObject(+el.dataset.id); });
+    list.querySelectorAll('.cn-send').forEach(b=> b.onclick=async(e)=>{ e.stopPropagation(); b.disabled=true;
+      const { error } = await sb.from('client_notifications').update({state:'approved'}).eq('id',b.dataset.id);
+      if(error){ toast('Ошибка: '+error.message); b.disabled=false; return; } toast('Отправлено клиенту'); await reload(); openBell(); });
+    list.querySelectorAll('.cn-skip').forEach(b=> b.onclick=async(e)=>{ e.stopPropagation(); b.disabled=true;
+      await sb.from('client_notifications').update({state:'skipped'}).eq('id',b.dataset.id); toast('Не отправлено'); await reload(); openBell(); });
     list.classList.add('open');
     lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); updateBell();
   }

@@ -21,24 +21,36 @@ Deno.serve(async (req) => {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
   const { data: objs } = await sb.from("objects")
-    .select("name, client_email, share_token, status, notif_settings, feed_entries(created_at, photos, body, client_state)")
+    .select("id, name, client_email, share_token, status, notif_settings, feed_entries(created_at, photos, body, client_state)")
     .not("client_email", "is", null);
 
   let sent = 0, skipped = 0;
   for (const o of objs ?? []) {
     if (!o.client_email || !o.share_token) { skipped++; continue; }
-    // Дайджест — только объектам, где «report» настроен на еженедельную периодичность.
+    // Сводка отчётов — только если «report» на еженедельной периодичности.
     const rep = (o as any).notif_settings?.report;
-    if (rep && (rep.on === false || rep.freq !== "weekly")) { skipped++; continue; }
-    const week = (o.feed_entries ?? []).filter((f: any) => f.client_state === "approved" && f.created_at > weekAgo);
-    if (!week.length) { skipped++; continue; } // не было новостей — не спамим
-    const photos = week.reduce((n: number, f: any) => n + ((f.photos ?? []).length), 0);
-    const last = [...week].sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1))[0];
+    const wantReport = rep ? (rep.on !== false && rep.freq === "weekly") : false;
+    const week = wantReport ? (o.feed_entries ?? []).filter((f: any) => f.client_state === "approved" && f.created_at > weekAgo) : [];
+    // Одобренные еженедельные уведомления событий (этап/срок/документ/эфир/уход), ещё не отправленные.
+    const { data: notifs } = await sb.from("client_notifications")
+      .select("id, title, body").eq("object_id", (o as any).id).eq("state", "approved").eq("freq", "weekly").is("sent_at", null);
+    const events = notifs ?? [];
+    if (!week.length && !events.length) { skipped++; continue; } // нечего слать
+
+    let items = "";
+    if (week.length) {
+      const photos = week.reduce((n: number, f: any) => n + ((f.photos ?? []).length), 0);
+      const last = [...week].sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1))[0];
+      items += `<li>${week.length} ${plural(week.length, "обновление", "обновления", "обновлений")}${photos ? `, ${photos} ${plural(photos, "новое фото", "новых фото", "новых фото")}` : ""}</li>`;
+      if (last.body) items += `<li style="color:#555">Последнее: «${esc(last.body)}»</li>`;
+    }
+    for (const ev of events) items += `<li><b>${esc(ev.title ?? "")}</b> — ${esc(ev.body ?? "")}</li>`;
+
     const url = `${APP_URL}/share.html?t=${o.share_token}`;
     const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#2b2b29;line-height:1.5">
       <p>Здравствуйте!</p>
-      <p>За неделю на вашем объекте «${esc(o.name)}» — ${week.length} ${plural(week.length, "обновление", "обновления", "обновлений")}${photos ? `, ${photos} ${plural(photos, "новое фото", "новых фото", "новых фото")}` : ""}.</p>
-      ${last.body ? `<p style="color:#555">Последнее: «${esc(last.body)}»</p>` : ""}
+      <p>Итоги недели на вашем объекте «${esc(o.name)}»:</p>
+      <ul style="padding-left:18px">${items}</ul>
       <p><a href="${url}" style="display:inline-block;background:#6b7257;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none">Посмотреть, как растёт ваш сад →</a></p>
       <p style="color:#8a8782;font-size:13px;margin-top:24px">Transparency Estate · еженедельная сводка</p>
     </div>`;
@@ -48,7 +60,10 @@ Deno.serve(async (req) => {
       headers: { Authorization: "Bearer " + Deno.env.get("RESEND_KEY"), "content-type": "application/json" },
       body: JSON.stringify({ from: FROM, to: o.client_email, subject: `За неделю на объекте «${o.name}»`, html }),
     });
-    if (r.ok) sent++; else skipped++;
+    if (r.ok) {
+      sent++;
+      if (events.length) await sb.from("client_notifications").update({ state: "sent", sent_at: new Date().toISOString() }).in("id", events.map((e: any) => e.id));
+    } else skipped++;
   }
   return new Response(JSON.stringify({ sent, skipped }), { status: 200, headers: { "content-type": "application/json" } });
 });
