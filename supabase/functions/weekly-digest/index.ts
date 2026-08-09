@@ -21,12 +21,15 @@ Deno.serve(async (req) => {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
   const { data: objs } = await sb.from("objects")
-    .select("name, client_email, share_token, status, feed_entries(created_at, photos, body, client_state)")
+    .select("name, client_email, share_token, status, notif_settings, feed_entries(created_at, photos, body, client_state)")
     .not("client_email", "is", null);
 
   let sent = 0, skipped = 0;
   for (const o of objs ?? []) {
     if (!o.client_email || !o.share_token) { skipped++; continue; }
+    // Дайджест — только объектам, где «report» настроен на еженедельную периодичность.
+    const rep = (o as any).notif_settings?.report;
+    if (rep && (rep.on === false || rep.freq !== "weekly")) { skipped++; continue; }
     const week = (o.feed_entries ?? []).filter((f: any) => f.client_state === "approved" && f.created_at > weekAgo);
     if (!week.length) { skipped++; continue; } // не было новостей — не спамим
     const photos = week.reduce((n: number, f: any) => n + ((f.photos ?? []).length), 0);

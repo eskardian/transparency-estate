@@ -476,6 +476,7 @@
         ${canManage(o)?'<button class="btn ghost" id="bankObj">Банк контента</button>':''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
+        ${canManage(o)?'<button class="btn ghost" id="notifObj">Уведомления</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
         ${isAdmin?'<button class="btn danger" id="delObj">Удалить</button>':''}
       </div>
@@ -529,6 +530,7 @@
     if($('careObj')) $('careObj').onclick = ()=> toggleCare(o);
     if($('tlObj')) $('tlObj').onclick = ()=> timelapseModal(o);
     if($('bankObj')) $('bankObj').onclick = ()=> contentBankModal(o);
+    if($('notifObj')) $('notifObj').onclick = ()=> notifSettingsModal(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -594,7 +596,10 @@
     try{
       const photos=[];
       for(const f of files){ const u=await uploadPhoto(f,`feed/${objectId}`); if(u) photos.push(u); }
-      const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos });
+      // «Требует подтверждения» (report.confirm): true → на согласование (pending), false → сразу клиенту (approved)
+      const obj = objects.find(x=>x.id===objectId);
+      const needsConfirm = (obj && obj.notif_settings && obj.notif_settings.report && obj.notif_settings.report.confirm) !== false;
+      const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos, client_state: needsConfirm?'pending':'approved' });
       if(error){ toast('Отчёт не отправился — попробуй ещё раз. ('+error.message+')'); $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт'; return; }
       if(status) await sb.from('objects').update({ status }).eq('id',objectId);
       toast('Отчёт добавлен'); clearFeedForm(); await reload();
@@ -720,6 +725,45 @@
       const { error } = await sb.from('objects').update({ stage_dates:dates }).eq('id',o.id);
       if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
       o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
+    };
+  }
+  // Настройки авто-уведомлений клиента (per-object): событие × вкл/выкл × периодичность × подтверждение.
+  const NOTIF_EVENTS=[
+    ['report','Новый отчёт с фото'], ['stage','Смена этапа стройки'], ['due','Приближение срока сдачи'],
+    ['document','Новый документ клиенту'], ['live','Начался прямой эфир'], ['care','Сезонный уход'],
+  ];
+  const NOTIF_FREQ=[['instant','Сразу'],['weekly','Раз в неделю'],['off','Не слать']];
+  function notifSettingsModal(o){
+    const S=o.notif_settings||{}, def={on:false,freq:'instant',confirm:false};
+    const row=(k,label)=>{ const s={...def,...(S[k]||{})};
+      return `<div class="notif-row" data-k="${k}" style="border-top:1px solid var(--line);padding:12px 0">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" class="n-on" ${s.on?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+          <span style="flex:1;font-size:15px">${label}</span></label>
+        <div class="n-sub" style="display:${s.on?'flex':'none'};gap:8px;align-items:center;margin:10px 0 0 28px;flex-wrap:wrap">
+          <select class="n-freq" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--raise)">
+            ${NOTIF_FREQ.map(([v,l])=>`<option value="${v}" ${s.freq===v?'selected':''}>${l}</option>`).join('')}</select>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer">
+            <input type="checkbox" class="n-confirm" ${s.confirm?'checked':''} style="width:17px;height:17px;accent-color:var(--accent)">требует моего подтверждения</label>
+        </div></div>`; };
+    openModal(`<h3>Уведомления клиента · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 8px">Что, как часто и нужно ли твоё подтверждение перед отправкой клиенту. Запросы на подтверждение приходят в колокольчик и Telegram.</p>
+      <div id="notifList">${NOTIF_EVENTS.map(([k,l])=>row(k,l)).join('')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px">Сейчас доставка активна по «Новый отчёт»; для остальных событий настройки сохраняются — доставку подключаем.</div>
+      <div class="mactions"><button class="btn ghost" id="nsCancel">Отмена</button><button class="btn" id="nsSave">Сохранить</button></div>`);
+    $('notifList').querySelectorAll('.notif-row').forEach(r=>{
+      const on=r.querySelector('.n-on'), sub=r.querySelector('.n-sub');
+      on.onchange=()=> sub.style.display=on.checked?'flex':'none';
+    });
+    $('nsCancel').onclick=closeModal;
+    $('nsSave').onclick=async()=>{
+      const out={};
+      $('notifList').querySelectorAll('.notif-row').forEach(r=>{
+        out[r.dataset.k]={ on:r.querySelector('.n-on').checked, freq:r.querySelector('.n-freq').value, confirm:r.querySelector('.n-confirm').checked };
+      });
+      const { error } = await sb.from('objects').update({ notif_settings: out }).eq('id', o.id);
+      if(error){ toast('Не сохранилось: '+error.message); return; }
+      o.notif_settings=out; closeModal(); toast('Настройки уведомлений сохранены');
     };
   }
   // Банк контента (6b/7c): все фото объекта из отчётов, фильтры + мультивыбор.

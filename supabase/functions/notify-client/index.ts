@@ -16,8 +16,11 @@ Deno.serve(async (req) => {
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: obj } = await sb.from("objects")
-    .select("name, client_email, share_token").eq("id", record.object_id).maybeSingle();
+    .select("name, client_email, share_token, notif_settings").eq("id", record.object_id).maybeSingle();
   if (!obj?.client_email || !obj.share_token) return new Response("skip", { status: 200 });
+  // Настройки уведомлений (событие «report»): шлём сразу только при on && freq='instant'.
+  const rep = obj.notif_settings?.report;
+  if (rep && (rep.on === false || rep.freq !== "instant")) return new Response("skip: settings", { status: 200 });
 
   const url = `${APP_URL}/share.html?t=${obj.share_token}`;
   const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#2b2b29;line-height:1.5">
