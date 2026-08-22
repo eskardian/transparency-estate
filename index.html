@@ -21,7 +21,7 @@
 <body>
   <!-- ВХОД -->
   <div id="auth">
-    <div class="card">
+    <div class="card" id="authCard">
       <h1>Transparency Estate</h1>
       <p>Карта объектов</p>
       <input id="email" type="email" placeholder="Почта" autocomplete="email">
@@ -30,6 +30,26 @@
       <button class="btn ghost" id="signup" style="width:100%;margin-top:8px">Создать аккаунт</button>
       <div class="msg" id="msg"></div>
       <a id="maglink">Войти по ссылке на почту</a>
+      <a id="toReg" style="display:block;margin-top:10px">Завести компанию для студии</a>
+    </div>
+    <div class="card" id="regCard" style="display:none">
+      <h1>Начать работу</h1>
+      <p>14 дней бесплатно, до 3 объектов. Карта не нужна.</p>
+      <input id="regCo" placeholder="Название компании">
+      <input id="regEmail" type="email" placeholder="Рабочая почта" autocomplete="email">
+      <input id="regPass" type="password" placeholder="Пароль · от 8 символов" autocomplete="new-password">
+      <button class="btn" id="regCreate" style="width:100%">Создать компанию</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px">Продолжая, вы принимаете условия использования и политику обработки данных.</div>
+      <a id="toLogin" style="display:block;margin-top:14px">Уже есть аккаунт — войти</a>
+    </div>
+    <div class="card" id="inviteCard" style="display:none">
+      <h1>Приглашение</h1>
+      <p id="invLead">Вас приглашают в команду</p>
+      <div style="font-size:13px;color:var(--muted);margin:10px 0 0">Роль — прораб: снимаете отчёты и загружаете фото. Согласование остаётся за менеджером.</div>
+      <input id="invEmail" type="email" placeholder="Ваша почта" readonly style="opacity:.7">
+      <input id="invPass" type="password" placeholder="Придумайте пароль" autocomplete="new-password">
+      <button class="btn" id="invAccept" style="width:100%">Принять и войти</button>
+      <a id="invDecline" style="display:block;margin-top:14px">Это не я — отклонить приглашение</a>
     </div>
   </div>
 
@@ -50,6 +70,7 @@
         <button class="btn ghost" id="acctBtn" title="Аккаунт">⋯</button>
         <div class="acct-menu" id="acctMenu">
           <div class="acct-email"><b id="whoEmail"></b> <span class="admin-tag" id="adminTag" style="display:none">админ</span></div>
+          <button id="profileBtn">Профиль</button>
           <button id="adminBtn" style="display:none">Админ-панель</button>
           <button id="pwBtn">Пароль для входа</button>
           <button id="logout">Выйти</button>
@@ -122,30 +143,37 @@
   // localStorage-лок вместо navigator.locks (тот вешает авторизацию на iOS/PWA) —
   // но без всякой блокировки два контекста (вкладка + PWA) гонялись за refresh-токеном
   // и Supabase детектил повторное использование токена → разлогин каждые пару дней.
-  // ponytail: не атомарно на 100% (окно гонки при одновременной первой записи ~20мс),
-  // апгрейд на BroadcastChannel/Atomics — если вылеты повторятся.
+  // Семантика acquireTimeout повторяет supabase: 0 = try-lock (занято → тихо пропустить,
+  // так работает тик авто-рефреша), <0 = ждать сколько нужно, >0 = ждать не дольше N мс.
+  // ponytail: не атомарно на 100% (окно ~20мс при одновременной первой записи) — двойной
+  // refresh раз в годы вместо раза в пару дней. Апгрейд на Web Locks — когда починят iOS.
   async function localStorageLock(name, acquireTimeout, fn) {
     const key = 'sb-lock-' + name;
     const staleMs = 10000; // мёртвая вкладка не держит лок дольше 10с
     const myId = Math.random().toString(36).slice(2);
     const deadline = acquireTimeout < 0 ? Infinity : Date.now() + acquireTimeout;
-    while (true) {
-      const raw = localStorage.getItem(key);
-      const held = raw && (Date.now() - JSON.parse(raw).ts < staleMs);
-      if (!held) {
-        localStorage.setItem(key, JSON.stringify({ id: myId, ts: Date.now() }));
-        await new Promise(r => setTimeout(r, 20));
-        const check = JSON.parse(localStorage.getItem(key) || '{}');
-        if (check.id === myId) break;
-      }
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const readLock = () => { try { return JSON.parse(localStorage.getItem(key)) || null; } catch { return null; } };
+    // Заявить лок и через паузу перечитать: если там всё ещё мой id — значит взял я,
+    // а не параллельная вкладка, записавшая следом.
+    const tryTake = async () => {
+      const cur = readLock();
+      if (cur && Date.now() - cur.ts < staleMs) return false;
+      localStorage.setItem(key, JSON.stringify({ id: myId, ts: Date.now() }));
+      await sleep(20);
+      const check = readLock();
+      return !!check && check.id === myId;
+    };
+    while (!(await tryTake())) {
+      if (acquireTimeout === 0) return; // try-lock: занято → молча пропускаем, fn не зовём
       if (Date.now() >= deadline) throw new Error('lock timeout: ' + name);
-      await new Promise(r => setTimeout(r, 50));
+      await sleep(50);
     }
     try {
       return await fn();
     } finally {
-      const cur = JSON.parse(localStorage.getItem(key) || '{}');
-      if (cur.id === myId) localStorage.removeItem(key);
+      const cur = readLock();
+      if (cur && cur.id === myId) localStorage.removeItem(key);
     }
   }
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -237,10 +265,13 @@
   }
 
   // ───────────────────────── Загрузка данных ─────────────────────────
+  let pendingNotifs=[]; // client_notifications в статусе pending (ждут подтверждения менеджера)
   async function reload(){
     const { data, error } = await sb.from('objects').select('*, feed_entries(*, feed_reactions(emoji))').order('updated_at',{ascending:false});
     if(error){ toast('Не получилось загрузить данные — проверь связь и потяни обновить. ('+error.message+')'); return; }
     objects = data||[];
+    const { data:pn } = await sb.from('client_notifications').select('*, objects(name)').eq('state','pending').order('created_at',{ascending:false});
+    pendingNotifs = pn||[];
     renderMarkers(); renderFilters(); renderSidebar(); renderPulse(); updateBell();
     if($('activity').style.display==='block') renderActivity();
     if($('calendar').style.display==='block') renderCalendar();
@@ -307,8 +338,12 @@
   }
   function renderSidebar(){
     const list=$('list'); const vis=visibleObjects();
-    if(!objects.length){ list.innerHTML='<div class="empty">Пока пусто.<br>Добавь первый объект — и он появится на карте.</div>'; return; }
-    if(!vis.length){ list.innerHTML='<div class="empty">Ничего не нашлось. Попробуй изменить фильтр или поиск.</div>'; return; }
+    if(!objects.length){ list.innerHTML='<div class="empty"><b style="display:block;font-size:19px;color:var(--ink);letter-spacing:-.02em;margin-bottom:8px">Пока ни одного объекта</b>Добавьте первый — по адресу или точкой на карте. Клиент получит ссылку сразу после первого отчёта.</div>'; return; }
+    if(!vis.length){
+      list.innerHTML='<div class="empty"><b style="display:block;font-size:19px;color:var(--ink);letter-spacing:-.02em;margin-bottom:8px">Ничего не нашли</b>Измените запрос или сбросьте фильтры.<div style="margin-top:14px"><button class="btn ghost" id="resetFilters">Сбросить фильтры</button></div></div>';
+      $('resetFilters').onclick=()=>{ searchText=''; filterStatus=null; $('search').value=''; renderFilters(); renderSidebar(); };
+      return;
+    }
     list.innerHTML = vis.map(o=>`
       <div class="row ${o.id===selectedId?'sel':''}" data-id="${o.id}">
         <img src="${o.cover_url||'icon.svg'}" alt="">
@@ -335,24 +370,35 @@
     const weekAgo=Date.now()-7*86400000;
     const week = scope.reduce((n,o)=>n+(o.feed_entries||[]).filter(f=>new Date(f.created_at).getTime()>weekAgo).length,0);
     const care = scope.filter(o=>o.care);
-    return { pending, overdue, week, care };
+    // «Затихли»: не завершён и без отчёта ≥ QUIET_DAYS дней (нет фото/новостей → клиент ждёт)
+    const QUIET_DAYS=10;
+    const daysQuiet=o=>{ const fs=o.feed_entries||[];
+      const times = fs.map(f=>new Date(f.created_at).getTime()).filter(t=>t>0);
+      const base = times.length ? Math.max(...times) : new Date(o.updated_at||o.created_at||Date.now()).getTime();
+      return Math.floor((Date.now()-base)/86400000); };
+    const quiet = scope.filter(o=> o.status!=='Завершён' && daysQuiet(o)>=QUIET_DAYS)
+      .map(o=>({o, days:daysQuiet(o)})).sort((a,b)=>b.days-a.days);
+    return { pending, overdue, week, care, quiet };
   }
   function renderPulse(){
     const box=$('pulse'); if(!box) return;
     if(!isAdmin){ box.style.display='none'; return; }
     box.style.display='block';
-    const { pending, overdue, week, care } = pulseData();
+    const { pending, overdue, week, care, quiet } = pulseData();
     box.innerHTML = `
       <div class="pulse-tiles">
         <button class="pulse-tile ${pending.length?'alert':''}" id="pulsePending"><b>${pending.length}</b><span>ждёт согласования</span></button>
         <button class="pulse-tile ${overdue.length?'warn':''}" id="pulseOverdue"><b>${overdue.length}</b><span>просрочено</span></button>
         <div class="pulse-tile"><b>${week}</b><span>за неделю</span></div>
       </div>
+      ${quiet.length?`<button class="pulse-care" id="pulseQuiet" style="background:var(--warn-tint);color:var(--warn)">Затихли: ${quiet.length} · давно без отчёта, клиент ждёт новостей</button>`:''}
       ${care.length?`<button class="pulse-care" id="pulseCare">На уходе: ${care.length} · пора ${SEASON_ADJ[curSeason()]} ухода</button>`:''}`;
     $('pulsePending').onclick=()=> pulseModal('Ждёт согласования',
       'Отчёты, которых клиент пока не видит. Тап — открыть объект и решить.', pending.map(x=>({o:x.o,f:x.f})));
     $('pulseOverdue').onclick=()=> pulseModal('Просрочено',
       'Этап или срок прошёл, объект не завершён.', overdue.map(o=>({o})));
+    if($('pulseQuiet')) $('pulseQuiet').onclick=()=> pulseModal('Затихли',
+      'Давно без отчёта — клиент давно не видел новостей. Тап — открыть объект и снять отчёт.', quiet.map(q=>({o:q.o, note:`тихо ${q.days} дн.`})));
     if($('pulseCare')) $('pulseCare').onclick=()=> careModal(care);
   }
   // Список объектов на уходе + чек-лист текущего сезона
@@ -372,9 +418,10 @@
   function pulseModal(title, sub, rows){
     openModal(`<h3>${esc(title)}</h3>
       <p style="font-size:13px;color:var(--muted);margin-top:0">${esc(sub)}</p>
-      ${rows.length? rows.map(({o,f})=>{
+      ${rows.length? rows.map((row)=>{
+        const {o,f}=row;
         const thumb=(f&&f.photos&&f.photos[0])||o.cover_url||'icon.svg';
-        const line = f ? (f.body?esc(f.body):'') : `срок ${o.due_date?new Date(o.due_date).toLocaleDateString('ru-RU'):((o.stage_dates||{})[o.status]?new Date((o.stage_dates||{})[o.status]).toLocaleDateString('ru-RU'):'—')}`;
+        const line = f ? (f.body?esc(f.body):'') : (row.note?esc(row.note):`срок ${o.due_date?new Date(o.due_date).toLocaleDateString('ru-RU'):((o.stage_dates||{})[o.status]?new Date((o.stage_dates||{})[o.status]).toLocaleDateString('ru-RU'):'—')}`);
         return `<div class="act-item pulse-row" data-id="${o.id}" style="cursor:pointer;border:1px solid var(--line);border-radius:9px;margin-bottom:8px">
           <img src="${thumb}">
           <div><div class="ai-obj">${esc(o.name)} <span class="badge" style="background:${statusColor(o.status)}">${esc(o.status||'—')}</span></div>
@@ -395,7 +442,7 @@
   // ───────────────────────── Этапы / PDF / голос ─────────────────────────
   function stagesBar(status){
     const idx = STATUSES.findIndex(s=>s.label===status);
-    const segs = STATUSES.map((s,i)=>`<span class="seg" style="${i<=idx?`background:${s.color};`:''}"></span>`).join('');
+    const segs = STATUSES.map((s,i)=>`<span class="seg${i<idx?' done':i===idx?' current':''}"></span>`).join('');
     return `<div class="stages-wrap"><div class="stages">${segs}</div>
       <div class="stages-cap">Этап ${idx>=0?idx+1:'—'} из ${STATUSES.length}${idx>=0?` · ${esc(STATUSES[idx].label)}`:''}</div></div>`;
   }
@@ -463,8 +510,11 @@
         <button class="btn ghost" id="editObj">Редактировать</button>
         ${canManage(o)?'<button class="btn ghost" id="roadmapObj">План работ</button>':''}
         ${canManage(o)?`<button class="btn ghost" id="careObj">${o.care?'Снять с ухода':'На уход'}</button>`:''}
+        ${canManage(o)?'<button class="btn ghost" id="tlObj">Таймлапс</button>':''}
+        ${canManage(o)?'<button class="btn ghost" id="bankObj">Банк контента</button>':''}
         <button class="btn ghost" id="pdfObj">PDF</button>
         ${canManage(o)?'<button class="btn ghost" id="shareObj">Клиенту</button>':''}
+        ${canManage(o)?'<button class="btn ghost" id="notifObj">Уведомления</button>':''}
         ${isAdmin?'<button class="btn ghost" id="accObj">Доступы</button>':''}
         ${isAdmin?'<button class="btn danger" id="delObj">Удалить</button>':''}
       </div>
@@ -516,6 +566,9 @@
     $('editObj').onclick = ()=> objectForm(o);
     if($('roadmapObj')) $('roadmapObj').onclick = ()=> roadmapModal(o);
     if($('careObj')) $('careObj').onclick = ()=> toggleCare(o);
+    if($('tlObj')) $('tlObj').onclick = ()=> timelapseModal(o);
+    if($('bankObj')) $('bankObj').onclick = ()=> contentBankModal(o);
+    if($('notifObj')) $('notifObj').onclick = ()=> notifSettingsModal(o);
     if($('accObj')) $('accObj').onclick = ()=> accessModal(o);
     if($('delObj')) $('delObj').onclick = ()=> deleteObject(o);
     $('pBody').querySelectorAll('.fphotos img').forEach(img=> img.onclick=()=>openLightbox(img.dataset.full, id));
@@ -581,7 +634,10 @@
     try{
       const photos=[];
       for(const f of files){ const u=await uploadPhoto(f,`feed/${objectId}`); if(u) photos.push(u); }
-      const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos });
+      // «Требует подтверждения» (report.confirm): true → на согласование (pending), false → сразу клиенту (approved)
+      const obj = objects.find(x=>x.id===objectId);
+      const needsConfirm = (obj && obj.notif_settings && obj.notif_settings.report && obj.notif_settings.report.confirm) !== false;
+      const { error } = await sb.from('feed_entries').insert({ object_id:objectId, body, status:status||null, photos, client_state: needsConfirm?'pending':'approved' });
       if(error){ toast('Отчёт не отправился — попробуй ещё раз. ('+error.message+')'); $('feedAdd').disabled=false; $('feedAdd').textContent='Добавить отчёт'; return; }
       if(status) await sb.from('objects').update({ status }).eq('id',objectId);
       toast('Отчёт добавлен'); clearFeedForm(); await reload();
@@ -639,8 +695,9 @@
     const editing=!!o;
     openModal(`
       <h3>${editing?'Редактировать объект':'Новый объект'}</h3>
+      ${editing?`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin:-8px 0 14px">создан ${new Date(o.created_at||Date.now()).toLocaleDateString('ru-RU')}</div>`:''}
+      <div class="field"><label>Этап и статус</label><select id="fStatus">${STATUSES.map((s,i)=>`<option value="${esc(s.label)}" ${editing&&o.status===s.label?'selected':''}>Этап ${i+1} · ${s.label}</option>`).join('')}</select></div>
       <div class="field"><label>Название</label><input id="fName" value="${editing?esc(o.name):''}"></div>
-      <div class="field"><label>Статус</label><select id="fStatus">${STATUSES.map(s=>`<option ${editing&&o.status===s.label?'selected':''}>${s.label}</option>`).join('')}</select></div>
       ${isSuper?`<div class="field"><label>Компания</label><select id="fCompany">${COMPANIES.map(c=>`<option value="${c.id}" ${(editing?o.company===c.id:companyFilter===c.id)?'selected':''}>${c.label}</option>`).join('')}</select></div>`:''}
       <div class="field"><label>Адрес (необязательно)</label><input id="fAddr" value="${editing?esc(o.address||''):esc(prefill&&prefill.address||'')}"></div>
       <div class="field"><label>Ответственный</label><input id="fManager" value="${editing?esc(o.manager||''):''}"></div>
@@ -654,8 +711,13 @@
         <button class="btn ghost" id="fCancel">Отмена</button>
         <button class="btn" id="fSave">${editing?'Сохранить':'Создать'}</button>
       </div>
+      ${editing&&isAdmin?`<div style="border-top:1px solid var(--line);margin-top:20px;padding-top:16px;display:flex;align-items:center;gap:12px">
+        <div style="flex:1;font-size:12.5px;color:var(--muted)">Удаление убирает объект с карты, вся история пропадает, ссылка клиента перестаёт работать. Отменить нельзя.</div>
+        <button class="btn danger" id="fDelete" style="flex:0 0 auto">Удалить</button>
+      </div>`:''}
     `);
     $('fCancel').onclick=closeModal;
+    if($('fDelete')) $('fDelete').onclick=()=>{ closeModal(); deleteObject(o); };
     $('fSave').onclick=async()=>{
       const name=$('fName').value.trim(); if(!name){ toast('Впиши название объекта'); return; }
       $('fSave').disabled=true; $('fSave').textContent='…';
@@ -701,6 +763,144 @@
       const { error } = await sb.from('objects').update({ stage_dates:dates }).eq('id',o.id);
       if(error){ toast('Не удалось сохранить — попробуй ещё раз. ('+error.message+')'); return; }
       o.stage_dates=dates; closeModal(); toast('План работ сохранён'); reload();
+    };
+  }
+  // Настройки авто-уведомлений клиента (per-object): событие × вкл/выкл × периодичность × подтверждение.
+  const NOTIF_EVENTS=[
+    ['report','Новый отчёт с фото'], ['stage','Смена этапа стройки'], ['due','Приближение срока сдачи'],
+    ['document','Новый документ клиенту'], ['live','Начался прямой эфир'], ['care','Сезонный уход'],
+  ];
+  const NOTIF_FREQ=[['instant','Сразу'],['weekly','Раз в неделю'],['off','Не слать']];
+  function notifSettingsModal(o){
+    const S=o.notif_settings||{}, def={on:false,freq:'instant',confirm:false};
+    const row=(k,label)=>{ const s={...def,...(S[k]||{})};
+      return `<div class="notif-row" data-k="${k}" style="border-top:1px solid var(--line);padding:12px 0">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" class="n-on" ${s.on?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+          <span style="flex:1;font-size:15px">${label}</span></label>
+        <div class="n-sub" style="display:${s.on?'flex':'none'};gap:8px;align-items:center;margin:10px 0 0 28px;flex-wrap:wrap">
+          <select class="n-freq" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--raise)">
+            ${NOTIF_FREQ.map(([v,l])=>`<option value="${v}" ${s.freq===v?'selected':''}>${l}</option>`).join('')}</select>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer">
+            <input type="checkbox" class="n-confirm" ${s.confirm?'checked':''} style="width:17px;height:17px;accent-color:var(--accent)">требует моего подтверждения</label>
+        </div></div>`; };
+    openModal(`<h3>Уведомления клиента · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 8px">Что, как часто и нужно ли твоё подтверждение перед отправкой клиенту. Запросы на подтверждение приходят в колокольчик и Telegram.</p>
+      <div id="notifList">${NOTIF_EVENTS.map(([k,l])=>row(k,l)).join('')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px">Сейчас доставка активна по «Новый отчёт»; для остальных событий настройки сохраняются — доставку подключаем.</div>
+      <div class="mactions"><button class="btn ghost" id="nsCancel">Отмена</button><button class="btn" id="nsSave">Сохранить</button></div>`);
+    $('notifList').querySelectorAll('.notif-row').forEach(r=>{
+      const on=r.querySelector('.n-on'), sub=r.querySelector('.n-sub');
+      on.onchange=()=> sub.style.display=on.checked?'flex':'none';
+    });
+    $('nsCancel').onclick=closeModal;
+    $('nsSave').onclick=async()=>{
+      const out={};
+      $('notifList').querySelectorAll('.notif-row').forEach(r=>{
+        out[r.dataset.k]={ on:r.querySelector('.n-on').checked, freq:r.querySelector('.n-freq').value, confirm:r.querySelector('.n-confirm').checked };
+      });
+      const { error } = await sb.from('objects').update({ notif_settings: out }).eq('id', o.id);
+      if(error){ toast('Не сохранилось: '+error.message); return; }
+      o.notif_settings=out; closeModal(); toast('Настройки уведомлений сохранены');
+    };
+  }
+  // Банк контента (6b/7c): все фото объекта из отчётов, фильтры + мультивыбор.
+  // Реюз моделей: «Открыть клиенту» = одобрить отчёты выбранных фото; «В таймлапс» = добавить в objects.timelapse.
+  function contentBankModal(o){
+    const photos=[];
+    (o.feed_entries||[]).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+      .forEach(f=>(f.photos||[]).forEach(p=>photos.push({url:p,date:f.created_at,eid:f.id,state:f.client_state})));
+    if(!photos.length){ toast('В отчётах объекта пока нет фото'); return; }
+    const tlUrls=new Set(((o.timelapse&&o.timelapse.frames)||[]).map(fr=>fr.url||fr));
+    photos.forEach(p=> p.inTL=tlUrls.has(p.url));
+    let filter='all'; const sel=new Set();
+    openModal(`<h3>Банк контента · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 12px">${photos.length} фото из отчётов. Выберите кадры → откройте клиенту или добавьте в таймлапс.</p>
+      <div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+      <div id="cbGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:44vh;overflow:auto"></div>
+      <div id="cbBar" style="display:none;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+        <span id="cbCount" style="flex:1;font-size:13px;color:var(--muted)"></span>
+        <button class="btn ghost" id="cbClient">Открыть клиенту</button>
+        <button class="btn" id="cbTL">В таймлапс</button>
+      </div>
+      <div class="mactions"><button class="btn ghost" id="cbClose">Закрыть</button></div>`);
+    const counts=()=>({all:photos.length, client:photos.filter(p=>p.state==='approved').length, tl:photos.filter(p=>p.inTL).length, draft:photos.filter(p=>p.state!=='approved').length});
+    const match=p=> filter==='all'||(filter==='client'&&p.state==='approved')||(filter==='tl'&&p.inTL)||(filter==='draft'&&p.state!=='approved');
+    const drawBar=()=>{ const bar=$('cbBar'); if(sel.size){ bar.style.display='flex'; $('cbCount').textContent='Выбрано '+sel.size+' фото'; } else bar.style.display='none'; };
+    const draw=()=>{
+      const c=counts();
+      $('cbFilters').innerHTML=[['all','Всё',c.all],['client','Видно клиенту',c.client],['tl','В таймлапсе',c.tl],['draft','Черновые',c.draft]].map(([k,l,n])=>`<button class="chip ${filter===k?'active':''}" data-k="${k}">${l} ${n}</button>`).join('');
+      $('cbFilters').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ filter=b.dataset.k; draw(); });
+      $('cbGrid').innerHTML=photos.map((p,i)=> match(p)?`<div class="cbcell" data-i="${i}" style="position:relative;cursor:pointer">
+        <img src="${esc(p.url)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;${sel.has(i)?'outline:3px solid var(--accent);outline-offset:-3px':''}">
+        <div style="position:absolute;top:5px;left:5px;display:flex;gap:4px">${p.state==='approved'?'<span style="background:var(--accent);color:#fff;font-size:9px;padding:2px 5px;border-radius:6px">клиент</span>':''}${p.inTL?'<span style="background:rgba(30,31,28,.72);color:#fff;font-size:9px;padding:2px 5px;border-radius:6px">таймлапс</span>':''}</div>
+        ${sel.has(i)?'<div style="position:absolute;top:5px;right:5px;background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px">✓</div>':''}
+      </div>`:'').join('');
+      $('cbGrid').querySelectorAll('.cbcell').forEach(el=>el.onclick=()=>{ const i=+el.dataset.i; sel.has(i)?sel.delete(i):sel.add(i); draw(); });
+      drawBar();
+    };
+    draw();
+    $('cbClose').onclick=closeModal;
+    $('cbClient').onclick=async()=>{
+      const eids=[...new Set([...sel].map(i=>photos[i].eid))];
+      const { error } = await sb.from('feed_entries').update({client_state:'approved'}).in('id',eids);
+      if(error){ toast('Ошибка: '+error.message); return; }
+      closeModal(); toast(eids.length>1?'Отчёты открыты клиенту':'Открыто клиенту'); reload();
+    };
+    $('cbTL').onclick=async()=>{
+      const frames=((o.timelapse&&o.timelapse.frames)||[]).map(fr=> typeof fr==='string'?{url:fr,date:null}:fr);
+      const have=new Set(frames.map(f=>f.url));
+      [...sel].map(i=>photos[i]).forEach(p=>{ if(!have.has(p.url)){ frames.push({url:p.url,date:p.date}); have.add(p.url); } });
+      frames.sort((a,b)=> new Date(a.date||0)-new Date(b.date||0));
+      const { error } = await sb.from('objects').update({ timelapse:{ frames, speed:(o.timelapse&&o.timelapse.speed)||'normal' } }).eq('id',o.id);
+      if(error){ toast('Ошибка: '+error.message); return; }
+      closeModal(); toast('Добавлено в таймлапс'); reload();
+    };
+  }
+  // Сборка таймлапса (7g): выбор кадров/порядок/скорость. Конфиг → objects.timelapse (null = авто).
+  function timelapseModal(o){
+    const cand=[];
+    (o.feed_entries||[]).slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))
+      .forEach(f=>(f.photos||[]).forEach(p=>cand.push({url:p, date:f.created_at})));
+    if(cand.length<2){ toast('Нужно хотя бы 2 фото в отчётах, чтобы собрать таймлапс'); return; }
+    const saved=o.timelapse; let state, speed='normal';
+    if(saved && Array.isArray(saved.frames) && saved.frames.length){
+      const su=saved.frames.map(fr=>fr.url||fr);
+      state=saved.frames.map(fr=>({url:fr.url||fr, date:fr.date||null, on:true}));
+      cand.forEach(c=>{ if(!su.includes(c.url)) state.push({url:c.url,date:c.date,on:false}); });
+      speed=saved.speed||'normal';
+    } else state=cand.map(c=>({url:c.url,date:c.date,on:true}));
+    openModal(`<h3>Сборка таймлапса · ${esc(o.name)}</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 14px">Выберите кадры и порядок — клиент увидит собранный ролик. Проверить можно кнопкой «Клиенту».</p>
+      <div class="field"><label>Скорость</label><select id="tlSpeed"><option value="slow">Медленно</option><option value="normal">Обычно</option><option value="fast">Быстро</option></select></div>
+      <div id="tlList" style="max-height:44vh;overflow:auto;margin:8px 0"></div>
+      <div class="mactions" style="justify-content:space-between">
+        <button class="btn ghost" id="tlAuto">Сбросить к авто</button>
+        <div style="display:flex;gap:8px"><button class="btn ghost" id="tlCancel">Отмена</button><button class="btn" id="tlSave">Сохранить</button></div>
+      </div>`);
+    $('tlSpeed').value=speed;
+    const listEl=$('tlList');
+    const draw=()=>{
+      listEl.innerHTML=state.map((s,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)">
+        <input type="checkbox" class="tlon" data-i="${i}" ${s.on?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+        <img src="${esc(s.url)}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;flex:0 0 auto;${s.on?'':'opacity:.4'}">
+        <span style="flex:1;font-family:var(--mono);font-size:11px;color:var(--muted)">${s.date?new Date(s.date).toLocaleDateString('ru-RU'):''}</span>
+        <button class="btn ghost tlup" data-i="${i}" style="padding:5px 9px" ${i===0?'disabled':''}>↑</button>
+        <button class="btn ghost tldn" data-i="${i}" style="padding:5px 9px" ${i===state.length-1?'disabled':''}>↓</button>
+      </div>`).join('');
+      listEl.querySelectorAll('.tlon').forEach(c=>c.onchange=()=>{ state[+c.dataset.i].on=c.checked; draw(); });
+      listEl.querySelectorAll('.tlup').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; [state[i-1],state[i]]=[state[i],state[i-1]]; draw(); });
+      listEl.querySelectorAll('.tldn').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; [state[i+1],state[i]]=[state[i],state[i+1]]; draw(); });
+    };
+    draw();
+    $('tlCancel').onclick=closeModal;
+    $('tlAuto').onclick=async()=>{ const {error}=await sb.from('objects').update({timelapse:null}).eq('id',o.id); if(error){toast('Ошибка: '+error.message);return;} closeModal(); toast('Таймлапс — снова автоматический'); reload(); };
+    $('tlSave').onclick=async()=>{
+      const frames=state.filter(s=>s.on).map(s=>({url:s.url,date:s.date}));
+      if(frames.length<2){ toast('Оставь хотя бы 2 кадра'); return; }
+      const { error } = await sb.from('objects').update({ timelapse:{ frames, speed:$('tlSpeed').value } }).eq('id',o.id);
+      if(error){ toast('Не сохранилось: '+error.message); return; }
+      closeModal(); toast('Таймлапс собран'); reload();
     };
   }
   // Переключить объект на сезонный уход / снять
@@ -891,16 +1091,27 @@
     if(!items.length){ box.innerHTML='<div class="empty">Пока ни одного отчёта. Как появятся — увидишь здесь.</div>'; return; }
     box.innerHTML = '<div class="act-head">Что обновилось — свежее сверху</div>' + items.map(({o,f})=>{
       const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
+      const cs=f.client_state;
+      const manage = canManage(o) && cs!==undefined;
+      const csLabel = cs==='approved'?'клиент видит':cs==='hidden'?'скрыто':'ждёт согласования';
       return `<div class="act-item" data-id="${o.id}">
         <img src="${thumb}">
-        <div>
-          <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
+        <div style="flex:1;min-width:0">
+          <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}${manage?`<span class="fvis ${esc(cs)}" style="margin:0">${csLabel}</span>`:''}</div>
           ${f.body?`<div class="ai-body">${esc(f.body)}</div>`:''}
           <div class="ai-time">${relDate(f.created_at)}</div>
+          ${manage?`<div style="margin-top:8px"><button class="fvis-btn" data-fid="${f.id}" data-to="${cs==='approved'?'hidden':'approved'}">${cs==='approved'?'Скрыть от клиента':'Показать клиенту'}</button></div>`:''}
         </div>
       </div>`;
     }).join('');
     box.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ setView('map'); selectObject(+el.dataset.id); });
+    box.querySelectorAll('.fvis-btn').forEach(b=> b.onclick=async(e)=>{
+      e.stopPropagation();
+      const { error } = await sb.from('feed_entries').update({ client_state:b.dataset.to }).eq('id',b.dataset.fid);
+      if(error){ toast('Не вышло — попробуй ещё раз'); return; }
+      toast(b.dataset.to==='approved'?'Клиент теперь видит отчёт':'Скрыто от клиента');
+      await reload();
+    });
   }
   // Календарь: вехи из плановых дат этапов (текущий и впереди) + сроки сдачи. Прошедшие этапы и завершённые объекты не показываем.
   const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -985,11 +1196,28 @@
       <div class="card-co"><div class="big-num">${reports7}</div><div class="sub">отчётов с объектов за 7 дней</div></div>`;
   }
 
+  // Тарифы (6e) — информационный раздел; биллинг пока не подключён.
+  function tariffsSection(){
+    const plans=[
+      {n:'Пробный', p:'14 дней бесплатно', f:['до 3 объектов','1 пользователь','карта, портал, отчёты'], cur:!isSuper},
+      {n:'Базовый', p:'для одной студии', f:['до 20 объектов','до 5 в команде','эфир, документы, уход'], cur:false},
+      {n:'Про', p:'для сети', f:['без лимита объектов','вся команда','white-label, приоритетная поддержка'], cur:isSuper},
+    ];
+    return `<div class="cards" style="grid-template-columns:repeat(3,1fr)">${plans.map(pl=>`
+      <div class="card-co" ${pl.cur?'style="border-color:var(--accent)"':''}>
+        <h3>${pl.n} ${pl.cur?'<span class="admin-tag" style="vertical-align:middle">текущий</span>':''}</h3>
+        <div class="sub">${pl.p}</div>
+        <div class="mini" style="flex-direction:column;gap:6px;align-items:flex-start;margin-top:12px">${pl.f.map(x=>`<span style="font-size:12.5px;color:var(--ink)">· ${x}</span>`).join('')}</div>
+      </div>`).join('')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">Оплата и смена тарифа подключаются позже — сейчас лимиты не применяются.</div>`;
+  }
   function renderAdmin(){
     $('admin').innerHTML = `<div class="adm-wrap">
       <div class="adm-top"><h2>Админ-панель</h2><button class="adm-close" id="admClose">✕</button></div>
       <div class="adm-sec">Сводка</div>
       ${adminSummary()}
+      <div class="adm-sec">Тарифы</div>
+      ${tariffsSection()}
       <div class="adm-sec">Компании · контакт поддержки для клиентов</div>
       <div id="companiesBox" class="team"><div class="team-row">Загрузка…</div></div>
       <div class="adm-sec">Команда</div>
@@ -1128,7 +1356,7 @@
   // меню аккаунта (⋯) — открыть/закрыть + закрытие по клику вне и по выбору пункта
   $('acctBtn').onclick = e=>{ e.stopPropagation(); $('acctMenu').classList.toggle('open'); };
   document.addEventListener('click', e=>{ if(!e.target.closest('.acct')) $('acctMenu').classList.remove('open'); });
-  ['adminBtn','pwBtn','logout'].forEach(id=> $(id).addEventListener('click', ()=> $('acctMenu').classList.remove('open')));
+  ['profileBtn','adminBtn','pwBtn','logout'].forEach(id=> $(id).addEventListener('click', ()=> $('acctMenu').classList.remove('open')));
 
   // ───────────────────────── Уведомления (новые отчёты с прошлого визита) ─────────────────────────
   let lastSeen=null;
@@ -1141,12 +1369,23 @@
     return items;
   }
   function updateBell(){
-    const n=newReports().length, b=$('bellBadge');
+    const n=newReports().length + pendingNotifs.length, b=$('bellBadge');
     if(n>0){ b.textContent=n>9?'9+':n; b.style.display='flex'; } else b.style.display='none';
   }
   function openBell(){
     const list=$('bellList'), items=newReports();
-    list.innerHTML = '<div class="bl-head">Новые отчёты</div>' + (items.length ? items.map(({o,f})=>{
+    const pend = pendingNotifs.map(p=>`
+      <div class="bl-pend" style="padding:12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px">
+        <div><div class="ai-obj">${esc(p.objects&&p.objects.name||'')} <span class="badge" style="background:var(--warn)">${esc(p.title||'')}</span></div>
+        <div class="ai-body">${esc(p.body||'')}</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn cn-send" data-id="${p.id}" style="flex:1;padding:8px">Отправить клиенту</button>
+          <button class="btn ghost cn-skip" data-id="${p.id}" style="flex:0 0 auto;padding:8px 12px">Не слать</button>
+        </div>
+      </div>`).join('');
+    list.innerHTML =
+      (pendingNotifs.length ? '<div class="bl-head">Ждут вашего подтверждения</div>' + pend : '') +
+      '<div class="bl-head">Новые отчёты</div>' + (items.length ? items.map(({o,f})=>{
       const thumb=(f.photos&&f.photos[0])||o.cover_url||'icon.svg';
       return `<div class="act-item" data-id="${o.id}"><img src="${thumb}"><div>
         <div class="ai-obj">${esc(o.name)} ${f.status?`<span class="badge" style="background:${statusColor(f.status)}">${esc(f.status)}</span>`:''}</div>
@@ -1154,6 +1393,11 @@
         <div class="ai-time">${relDate(f.created_at)}</div></div></div>`;
     }).join('') : '<div class="empty">Новых отчётов пока нет — как появятся, увидишь здесь.</div>');
     list.querySelectorAll('.act-item').forEach(el=> el.onclick=()=>{ list.classList.remove('open'); setView('map'); selectObject(+el.dataset.id); });
+    list.querySelectorAll('.cn-send').forEach(b=> b.onclick=async(e)=>{ e.stopPropagation(); b.disabled=true;
+      const { error } = await sb.from('client_notifications').update({state:'approved'}).eq('id',b.dataset.id);
+      if(error){ toast('Ошибка: '+error.message); b.disabled=false; return; } toast('Отправлено клиенту'); await reload(); openBell(); });
+    list.querySelectorAll('.cn-skip').forEach(b=> b.onclick=async(e)=>{ e.stopPropagation(); b.disabled=true;
+      await sb.from('client_notifications').update({state:'skipped'}).eq('id',b.dataset.id); toast('Не отправлено'); await reload(); openBell(); });
     list.classList.add('open');
     lastSeen=new Date().toISOString(); localStorage.setItem(seenKey(), lastSeen); updateBell();
   }
@@ -1180,6 +1424,7 @@
     // профиль и готовность карты — параллельно (оба ждут сеть, незачем по очереди)
     const ymapsReady = new Promise(r=> ymaps.ready(r));
     const { data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+    window.__me = prof || {};
     isAdmin = !!(prof && prof.is_admin);
     myCompany = prof ? prof.company : null;
     isSuper = isAdmin && !myCompany;
@@ -1239,6 +1484,21 @@
   $('password').onkeydown = e=>{ if(e.key==='Enter') $('login').click(); };
   $('email').onkeydown = e=>{ if(e.key==='Enter') $('password').focus(); };
 
+  // Экран регистрации компании (7e) — пока только вёрстка; открытый signup на боевом бэкенде выключен.
+  $('toReg').onclick = ()=>{ $('authCard').style.display='none'; $('regCard').style.display=''; };
+  $('toLogin').onclick = ()=>{ $('regCard').style.display='none'; $('authCard').style.display=''; };
+  $('regCreate').onclick = ()=> toast('Регистрация новых компаний скоро — пока доступ выдаёт администратор');
+
+  // Приём приглашения (7e) — по ссылке ?invite=…&by=…&co=…&email=…; бэкенд приглашений пока не подключён.
+  const inviteParams = new URLSearchParams(location.search);
+  if(inviteParams.get('invite')){
+    $('authCard').style.display='none'; $('inviteCard').style.display='';
+    $('invLead').textContent = (inviteParams.get('by')||'Менеджер') + ' приглашает вас в ' + (inviteParams.get('co')||'команду');
+    if(inviteParams.get('email')) $('invEmail').value = inviteParams.get('email');
+  }
+  $('invAccept').onclick = ()=> toast('Приглашения скоро — пока доступ выдаёт администратор через «Доступы»');
+  $('invDecline').onclick = ()=>{ $('inviteCard').style.display='none'; $('authCard').style.display=''; };
+
   // Задать/сменить пароль (для уже вошедших — Иван ставит пароль один раз)
   function setPasswordModal(){
     openModal(`<h3>Пароль для входа</h3>
@@ -1255,6 +1515,45 @@
   }
   $('pwBtn').onclick = setPasswordModal;
   $('logout').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+
+  // Профиль и уведомления (экран 7f). Своё имя/телефон/настройки — через безопасный RPC update_my_profile.
+  function profileModal(){
+    const me = window.__me || {};
+    const role = (me.is_admin && !me.company) ? 'супер-админ' : me.is_admin ? 'админ' : 'менеджер';
+    const sub = [role, me.company?companyLabel(me.company):''].filter(Boolean).join(' · ');
+    const n = me.notif || {};
+    const on = k => (n[k] !== false); // по умолчанию включено, пока явно не выключили
+    const row = (k,label) => `<label class="accrow" style="cursor:pointer"><span>${label}</span>
+      <input type="checkbox" data-nk="${k}" ${on(k)?'checked':''} style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer"></label>`;
+    openModal(`<h3>Профиль</h3>
+      <p style="font-size:13px;color:var(--muted);margin:-8px 0 18px">${esc(currentUser?.email||'')}${sub?' · '+esc(sub):''}</p>
+      <div class="field"><label>Имя</label><input id="pfName" value="${esc(me.full_name||'')}" placeholder="Как вас зовут"></div>
+      <div class="field"><label>Телефон для клиентов</label><input id="pfPhone" value="${esc(me.client_phone||'')}" placeholder="+7 900 000-00-00">
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Клиент видит его в портале, в блоке «Связаться».</div></div>
+      <div class="adm-sec" style="margin:22px 0 6px">Уведомления</div>
+      ${row('pending','Отчёт ждёт согласования')}
+      ${row('viewed','Клиент открыл портал')}
+      ${row('deadline','Срок этапа истекает через 3 дня')}
+      ${row('weekly','Сводка за неделю на почту')}
+      <div class="mactions" style="justify-content:space-between;margin-top:20px">
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" id="pfPw">Сменить пароль</button>
+          <button class="btn ghost" id="pfOut">Выйти</button>
+        </div>
+        <button class="btn" id="pfSave">Сохранить</button>
+      </div>`);
+    $('pfPw').onclick = ()=>{ closeModal(); setPasswordModal(); };
+    $('pfOut').onclick = async ()=>{ await sb.auth.signOut(); location.reload(); };
+    $('pfSave').onclick = async ()=>{
+      const notif = {}; document.querySelectorAll('#modal [data-nk]').forEach(c=> notif[c.dataset.nk]=c.checked);
+      const p_name = $('pfName').value.trim()||null, p_phone = $('pfPhone').value.trim()||null;
+      const { error } = await sb.rpc('update_my_profile', { p_name, p_phone, p_notif:notif });
+      if(error){ toast('Не сохранилось — попробуй ещё раз. ('+error.message+')'); return; }
+      window.__me = { ...me, full_name:p_name, client_phone:p_phone, notif };
+      closeModal(); toast('Профиль сохранён');
+    };
+  }
+  $('profileBtn').onclick = profileModal;
 
   // boot ровно один раз: и при загрузке с сохранённой сессией, и сразу после свежего входа
   let booted=false;

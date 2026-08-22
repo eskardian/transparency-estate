@@ -1,7 +1,7 @@
 // ponytail: оболочка кэшируется для офлайна. HTML — network-first (свежая версия онлайн,
 // кэш только если сети нет), статика — stale-while-revalidate (отдаём из кэша, но всегда
 // тянем свежее в фоне и обновляем кэш — иначе CSS/JS залипают навсегда). Данные/карта — сеть.
-const CACHE = 'kampika-v16';
+const CACHE = 'te-v17'; // бамп обязателен при смене статики: активация чистит старые кэши
 const SHELL = ['./', './index.html', './polish.css', './vibe.js', './manifest.json', './icon.svg',
   './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 

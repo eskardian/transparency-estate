@@ -1,12 +1,11 @@
-# Netlify local link + build
-.netlify/
-
-# зависимости и окружение
-node_modules/
-.env
-.env.*
-
-# секреты (Supabase service key, db-пароль) — только локально
-.secrets/
 
 .DS_Store
+.env
+.env.*
+.netlify/
+.secrets/
+# зависимости и окружение
+# секреты (Supabase service key, db-пароль) — только локально
+# Netlify local link + build
+node_modules/
+supabase/.temp/

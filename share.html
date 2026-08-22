@@ -53,7 +53,11 @@
     return html ? `<div class="sec">Связаться</div>${html}` : '';
   }
 
-  function state(msg){ document.getElementById('root').innerHTML = `<div class="state">${esc(msg)}</div>`; }
+  // Состояния (5a–5f): заголовок + текст. done=true → не крутить спиннер (финальные экраны).
+  function state(title, body, done){
+    document.getElementById('root').innerHTML =
+      `<div class="state${done?' done':''}">${title?`<b>${esc(title)}</b>`:''}${body?esc(body):''}</div>`;
+  }
 
   // Реакции клиента на запись ленты (одна на кадр+эмодзи с браузера, дедуп через localStorage).
   const REACT_EMOJIS = ['👍','❤️','🔥'];
@@ -83,7 +87,7 @@
 
   function stagesBar(status){
     const idx = STATUSES.findIndex(s=>s.label===status);
-    const segs = STATUSES.map((s,i)=>`<span class="seg" style="${i<=idx?`background:${s.color};`:''}"></span>`).join('');
+    const segs = STATUSES.map((s,i)=>`<span class="seg${i<idx?' done':i===idx?' current':''}"></span>`).join('');
     return `<div class="stages">${segs}</div>
       <div class="stages-cap">Этап ${idx>=0?idx+1:'—'} из ${STATUSES.length}${idx>=0?` · ${esc(STATUSES[idx].label)}`:''}</div>`;
   }
@@ -140,20 +144,27 @@
   }
 
   // Таймлапс «как рос участок»: все фото ленты по хронологии, play + ползунок.
-  function timelapse(feed){
-    const chrono = feed.slice().reverse(); // RPC отдаёт desc → в хронологию
-    const frames = [];
-    chrono.forEach(f => (f.photos||[]).forEach(p => frames.push({url:p, date:f.created_at})));
+  function timelapse(feed, cfg){
+    let frames;
+    if(cfg && Array.isArray(cfg.frames) && cfg.frames.length >= 2){
+      frames = cfg.frames.map(fr => typeof fr==='string' ? {url:fr,date:null} : fr); // собрано менеджером (порядок задан)
+    } else {
+      const chrono = feed.slice().reverse(); // RPC отдаёт desc → в хронологию
+      frames = [];
+      chrono.forEach(f => (f.photos||[]).forEach(p => frames.push({url:p, date:f.created_at})));
+    }
     if(frames.length < 2) return '';
     window.__tlFrames = frames;
+    window.__tlSpeed = ({slow:1200, normal:750, fast:400})[cfg&&cfg.speed] || 750;
     const last = frames.length-1;
+    const dtxt = i => frames[i].date ? new Date(frames[i].date).toLocaleDateString('ru-RU') : '';
     return `<div class="sec">Как рос участок</div>
       <div class="tl">
         <img id="tlImg" src="${esc(frames[last].url)}" alt="прогресс">
         <div class="tl-ctl">
           <button id="tlPlay" class="tl-play" aria-label="Проиграть">▶</button>
           <input type="range" id="tlRange" min="0" max="${last}" value="${last}">
-          <span id="tlDate" class="tl-date">${new Date(frames[last].date).toLocaleDateString('ru-RU')}</span>
+          <span id="tlDate" class="tl-date">${dtxt(last)}</span>
         </div>
       </div>`;
   }
@@ -163,7 +174,7 @@
           dateEl=document.getElementById('tlDate'), play=document.getElementById('tlPlay');
     if(!range) return;
     frames.forEach(f=>{ const im=new Image(); im.src=f.url; }); // префетч для плавности
-    const show=i=>{ img.src=frames[i].url; dateEl.textContent=new Date(frames[i].date).toLocaleDateString('ru-RU'); range.value=i; };
+    const show=i=>{ img.src=frames[i].url; dateEl.textContent=frames[i].date?new Date(frames[i].date).toLocaleDateString('ru-RU'):''; range.value=i; };
     range.oninput=()=> show(+range.value);
     let timer=null;
     const stop=()=>{ if(timer){ clearInterval(timer); timer=null; } play.textContent='▶'; };
@@ -172,7 +183,7 @@
       play.textContent='⏸';
       let i = (+range.value>=frames.length-1) ? 0 : +range.value;
       show(i);
-      timer=setInterval(()=>{ i++; if(i>=frames.length){ stop(); return; } show(i); }, 750);
+      timer=setInterval(()=>{ i++; if(i>=frames.length){ stop(); return; } show(i); }, window.__tlSpeed||750);
     };
   }
 
@@ -228,10 +239,11 @@
   }
 
   (async()=>{
-    if(!token){ state('Ссылка недоступна. Попроси менеджера прислать её заново.'); return; }
+    state(null, 'Загружаем ваш объект…'); // 5a: спиннер, пока идёт RPC
+    if(!token){ state('Ссылка недоступна', 'Попроси менеджера прислать её заново.', true); return; }
     const { data, error } = await sb.rpc('get_shared_object', { token });
-    if(error){ state('Не получилось загрузить объект — проверь связь и обнови страницу.'); return; }
-    if(!data){ state('Объект не найден. Возможно, ссылку обновили — попроси у менеджера новую.'); return; }
+    if(error){ state('Не получилось загрузить', 'Проверь связь и обнови страницу.', true); return; }
+    if(!data){ state('Эта ссылка больше не открывается', 'Возможно, доступ обновили. Попроси у менеджера новую — старые перестают работать из соображений приватности.', true); return; }
     const o = data;
     window.__liveUrl = o.live_url;
     const feed = o.feed || [];
@@ -253,16 +265,16 @@
       <button class="roadmap-btn" id="roadmapBtn">Показать план работ</button>
       <div class="roadmap" id="roadmapBox">${roadmapHtml(o)}</div>
       ${digest?`<div class="digest"><div class="dh">За последнюю неделю</div><div class="dl">${esc(digest)} — работа идёт.</div></div>`:''}
-      ${timelapse(feed)}
+      ${timelapse(feed, o.timelapse)}
       ${galleryHtml(feed)}
       <div class="sec">Ход работ</div>
       ${feed.length? feed.map(f=>`
         <div class="item">
-          <div class="d">${f.status?esc(f.status)+' · ':''}${new Date(f.created_at).toLocaleDateString('ru-RU')}</div>
+          <div class="d">${f.status?`<span class="stage-tag">${esc(f.status)}</span>`:''}${new Date(f.created_at).toLocaleDateString('ru-RU')}</div>
           ${f.body?`<div class="b">${esc(f.body)}</div>`:''}
           ${(f.photos||[]).length?`<div class="ph">${f.photos.map(p=>`<img src="${esc(p)}" data-full="${esc(p)}">`).join('')}</div>`:''}
           ${reactionRow(f)}
-        </div>`).join('') : '<div class="item">Пока тихо — скоро здесь появятся первые новости с участка.</div>'}
+        </div>`).join('') : '<div class="item" style="border-top:0;color:var(--muted)">Первые фото с участка появятся здесь, как только бригада выйдет на объект.</div>'}
       ${(o.docs&&o.docs.length)?`<div class="sec">Документы</div><div class="docs">${o.docs.map(d=>`<button class="doc-dl" data-id="${d.id}">📄 ${esc(d.name)}</button>`).join('')}</div>`:''}
       ${contactWindows(o)}
     `;
