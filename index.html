@@ -119,9 +119,37 @@
   // ───────────────────────── Конфиг ─────────────────────────
   const SUPABASE_URL = "https://pqmjulphghojlaijffty.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_yrj4fEkOl0uGoKT1i_NgyQ_vGrbi73Z";
-  // ponytail: no-op lock — обходит зависание авторизации supabase-js на iOS/PWA (navigator.locks deadlock)
+  // localStorage-лок вместо navigator.locks (тот вешает авторизацию на iOS/PWA) —
+  // но без всякой блокировки два контекста (вкладка + PWA) гонялись за refresh-токеном
+  // и Supabase детектил повторное использование токена → разлогин каждые пару дней.
+  // ponytail: не атомарно на 100% (окно гонки при одновременной первой записи ~20мс),
+  // апгрейд на BroadcastChannel/Atomics — если вылеты повторятся.
+  async function localStorageLock(name, acquireTimeout, fn) {
+    const key = 'sb-lock-' + name;
+    const staleMs = 10000; // мёртвая вкладка не держит лок дольше 10с
+    const myId = Math.random().toString(36).slice(2);
+    const deadline = acquireTimeout < 0 ? Infinity : Date.now() + acquireTimeout;
+    while (true) {
+      const raw = localStorage.getItem(key);
+      const held = raw && (Date.now() - JSON.parse(raw).ts < staleMs);
+      if (!held) {
+        localStorage.setItem(key, JSON.stringify({ id: myId, ts: Date.now() }));
+        await new Promise(r => setTimeout(r, 20));
+        const check = JSON.parse(localStorage.getItem(key) || '{}');
+        if (check.id === myId) break;
+      }
+      if (Date.now() >= deadline) throw new Error('lock timeout: ' + name);
+      await new Promise(r => setTimeout(r, 50));
+    }
+    try {
+      return await fn();
+    } finally {
+      const cur = JSON.parse(localStorage.getItem(key) || '{}');
+      if (cur.id === myId) localStorage.removeItem(key);
+    }
+  }
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { lock: (_name, _timeout, fn) => fn() }
+    auth: { lock: localStorageLock }
   });
 
   // Статусы и их цвета (маркеры на карте + бейджи)
