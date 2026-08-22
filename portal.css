@@ -1,30 +1,32 @@
+@import url("https://fonts.googleapis.com/css2?family=Rethink+Sans:ital,wght@0,400..800;1,400..800&family=Hedvig+Letters+Serif:opsz@12..24&display=swap");
 /* ===== Стили клиентского портала (share.html) ===== */
 /* Заход 2b — светлый, редакционный: крупная типографика, медиа во всю ширину,
    разделители вместо карточек, тёмный контакт-блок, липкая нижняя панель.
-   id/классы не переименованы — только оформление. Без внешних шрифтов и CDN. */
+   id/классы не переименованы — только оформление. */
 
 :root{
-  --bg:#f7f5f0; --card:#f7f5f0; --ink:#1e1f1c; --ink-2:#3f403b;
-  --muted:#8a8782; --faint:#a9a294;
-  --line:#e0dbd1; --line-soft:#ebe6dc;
-  --accent:#5d6a3c; --accent-ink:#5d6a3c; --accent-tint:#eceee3; --accent-hi:#c4d68c;
-  --live:#b4453a;
+  --display:'Hedvig Letters Serif',Georgia,serif;
+  --bg:#FFFFFF; --card:#FFFFFF; --ink:#1E3D59; --ink-2:#575757;
+  --muted:#48749E; --faint:#575757;
+  --line:#E5E5E5; --line-soft:#F1F1F1;
+  --accent:#CD4900; --accent-ink:#CD4900; --accent-tint:#FFF1DD; --accent-hi:#FA9819;
+  --live:#F20909;
   --r-xl:24px; --r-lg:20px; --r-md:14px; --r-sm:10px;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --mono:'Rethink Sans',sans-serif;
   --pad:22px;
-  --sh-lift:0 12px 30px -18px rgba(43,43,41,.6);
+  --sh-lift:0 12px 30px -18px rgba(30,61,89,.6);
 }
 /* Сезонные палитры (класс season-* ставит Vibe.applySeason) */
-body.season-spring{ --accent:#4e7a3e; --accent-tint:#edf2e8; --accent-hi:#c9dd93; --bg:#f6f5ef; --card:#f6f5ef; --line:#e0e2d8; }
-body.season-summer{ --accent:#3f6f32; --accent-tint:#ecf1e7; --accent-hi:#c4d68c; --bg:#f6f6f0; --card:#f6f6f0; --line:#dee3d6; }
-body.season-autumn{ --accent:#7d5f34; --accent-tint:#f4efe4; --accent-hi:#e2c688; --bg:#f8f4ec; --card:#f8f4ec; --line:#e6ded1; }
-body.season-winter{ --accent:#4c6152; --accent-tint:#eaeeeb; --accent-hi:#b6ccb9; --bg:#f4f4f2; --card:#f4f4f2; --line:#dfe0dc; --muted:#86867f; }
+body.season-spring{ --accent:#FA9819; --accent-tint:#FFF6E8; --accent-hi:#FFC97A; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; }
+body.season-summer{ --accent:#CD4900; --accent-tint:#FFF1DD; --accent-hi:#FA9819; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; }
+body.season-autumn{ --accent:#A03900; --accent-tint:#F7E9DC; --accent-hi:#FA9819; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; }
+body.season-winter{ --accent:#1E3D59; --accent-tint:#DEEEFE; --accent-hi:#B6C9CF; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; --muted:#575757; }
 
 *{ box-sizing:border-box; }
 html{ -webkit-text-size-adjust:100%; }
 body{
   margin:0; color:var(--ink); background:var(--bg);
-  font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  font-family:'Rethink Sans',-apple-system,"Segoe UI",sans-serif;
   -webkit-font-smoothing:antialiased; line-height:1.45;
   transition:background .4s ease,color .4s ease;
 }
@@ -38,9 +40,11 @@ a:hover{ color:var(--ink); }
 .wrap:has(.dock){ padding-bottom:112px; }
 
 /* Шапка — моно-строка с идентификатором объекта */
+/* header лежит рядом с .wrap, а не внутри — без своей колонки он прилипал к краю
+   экрана мимо контента. Повторяем габариты .wrap, чтобы строка встала в колонку. */
 header{
   display:flex; align-items:center; justify-content:space-between;
-  padding:26px 0 0;
+  max-width:430px; margin:0 auto; padding:26px var(--pad) 0;
   font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted);
 }
 
@@ -57,10 +61,10 @@ header{
   font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted);
 }
 .progress-sticky .ps-top b{
-  font-family:inherit; font-size:28px; line-height:1; font-weight:600;
+  font-family:var(--display); font-size:28px; line-height:28px; font-weight:400;
   letter-spacing:-.035em; text-transform:none; color:var(--accent); font-variant-numeric:tabular-nums;
 }
-.ps-bar{ height:4px; border-radius:2px; background:#ddd8cd; overflow:hidden; }
+.ps-bar{ height:4px; border-radius:2px; background:#E5E5E5; overflow:hidden; }
 .ps-fill{ height:100%; background:var(--accent); border-radius:2px; transition:width .6s cubic-bezier(.22,.61,.36,1); }
 
 /* ——— Обложка во всю ширину и крупный заголовок ——— */
@@ -71,7 +75,7 @@ h1{
 .cover{
   display:block; width:100vw; max-width:none; height:300px; object-fit:cover;
   margin:22px calc(50% - 50vw) 0; border-radius:0;
-  background:repeating-linear-gradient(135deg,#e6e1d7 0 12px,#e1dbd0 12px 24px);
+  background:repeating-linear-gradient(135deg,#E8EBEF 0 12px,#DEEEFE 12px 24px);
 }
 
 .meta{
@@ -103,7 +107,7 @@ h1{
 
 /* ——— Ход проекта: сегменты этапов ——— */
 .stages{ display:flex; gap:5px; margin:16px 0 0; }
-.stages .seg{ flex:1; height:4px; border-radius:2px; background:#ddd8cd; transition:background .4s ease; }
+.stages .seg{ flex:1; height:4px; border-radius:2px; background:#E5E5E5; transition:background .4s ease; }
 .stages .seg.done, .stages .seg.current{ background:var(--accent); }
 .stages-cap{ font-size:17px; font-weight:500; color:var(--ink); margin-top:12px; }
 .eta{
@@ -158,7 +162,7 @@ h1{
 /* ——— Прямой эфир: метка на обложке + окно ——— */
 .live-open{
   display:inline-flex; align-items:center; justify-content:center; gap:8px; width:auto;
-  background:var(--ink); color:#f7f5f0; border:0; border-radius:999px;
+  background:var(--ink); color:#FFFFFF; border:0; border-radius:999px;
   padding:10px 16px; font-size:13px; font-weight:400; margin:18px 0 0;
   cursor:pointer; box-shadow:none;
 }
@@ -171,7 +175,7 @@ h1{
   background:#111; border-radius:var(--r-lg); overflow:hidden;
   box-shadow:0 24px 60px -20px rgba(0,0,0,.55); flex-direction:column;
 }
-.live-head{ display:flex; align-items:center; gap:8px; padding:9px 11px; background:#1c1c1c; color:#fff; cursor:move; user-select:none; }
+.live-head{ display:flex; align-items:center; gap:8px; padding:9px 11px; background:#14293B; color:#fff; cursor:move; user-select:none; }
 .live-badge{ font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:#fff; background:var(--live); padding:3px 7px; border-radius:999px; }
 .live-title{ font-size:13px; } .live-sp{ flex:1; }
 .live-btn{ background:none; border:0; color:#fff; font-size:14px; cursor:pointer; padding:4px 6px; line-height:1; border-radius:6px; }
@@ -183,27 +187,27 @@ h1{
 /* ——— Таймлапс: главный медиа-блок, контролы поверх кадра ——— */
 .tl{
   position:relative; width:100%; height:240px; border-radius:var(--r-lg); overflow:hidden;
-  background:repeating-linear-gradient(135deg,#e6e1d7 0 12px,#e1dbd0 12px 24px);
+  background:repeating-linear-gradient(135deg,#E8EBEF 0 12px,#DEEEFE 12px 24px);
   border:0; box-shadow:none;
 }
 .tl img{ display:block; width:100%; height:100%; aspect-ratio:auto; object-fit:cover; background:none; }
 .tl-ctl{
   position:absolute; inset:auto 0 0 0; display:flex; align-items:center; gap:12px;
-  padding:14px; background:linear-gradient(to top,rgba(30,31,28,.6),transparent);
+  padding:14px; background:linear-gradient(to top,rgba(30,61,89,.6),transparent);
 }
 .tl-play{
   flex:0 0 auto; width:42px; height:42px; border-radius:50%; border:0;
-  background:#f7f5f0; color:var(--ink); font-size:13px; cursor:pointer;
+  background:#FFFFFF; color:var(--ink); font-size:13px; cursor:pointer;
 }
 .tl-play:active{ transform:scale(.96); }
-.tl-ctl input[type=range]{ flex:1; accent-color:#f7f5f0; height:20px; }
-.tl-date{ flex:0 0 auto; font-family:var(--mono); font-size:11px; color:#f7f5f0; min-width:44px; text-align:right; }
+.tl-ctl input[type=range]{ flex:1; accent-color:#FFFFFF; height:20px; }
+.tl-date{ flex:0 0 auto; font-family:var(--mono); font-size:11px; color:#FFFFFF; min-width:44px; text-align:right; }
 
 /* ——— Галерея: свёрнута до ссылки, сетка — запасной вид ——— */
 .gallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
 .gallery img{
   width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--r-sm); cursor:pointer;
-  background:repeating-linear-gradient(135deg,#e6e1d7 0 10px,#e1dbd0 10px 20px);
+  background:repeating-linear-gradient(135deg,#E8EBEF 0 10px,#DEEEFE 10px 20px);
   transition:opacity .15s ease;
 }
 .gallery img:active{ opacity:.75; }
@@ -219,7 +223,7 @@ h1{
   font-family:var(--mono); font-size:11px; color:var(--muted);
 }
 .item .d .stage-tag{
-  font-family:-apple-system,"Segoe UI",Roboto,sans-serif; letter-spacing:0;
+  font-family:'Rethink Sans',-apple-system,"Segoe UI",sans-serif; letter-spacing:0;
   padding:3px 9px; border-radius:999px; background:var(--accent-tint); color:var(--accent); font-size:11px;
 }
 .item .b{ font-size:16.5px; line-height:1.5; white-space:pre-wrap; text-wrap:pretty; }
@@ -227,7 +231,7 @@ h1{
 .item .ph img{
   width:100%; max-width:none; height:110px; aspect-ratio:auto; object-fit:cover;
   border-radius:var(--r-md); cursor:pointer;
-  background:repeating-linear-gradient(135deg,#e6e1d7 0 10px,#e1dbd0 10px 20px);
+  background:repeating-linear-gradient(135deg,#E8EBEF 0 10px,#DEEEFE 10px 20px);
 }
 /* Опционально: ссылка «показать ещё N записей» вместо длинной ленты */
 .feed-more{
@@ -244,10 +248,10 @@ h1{
   padding:7px 12px; cursor:pointer; color:var(--ink);
   transition:border-color .15s ease, background .15s ease, transform .1s ease;
 }
-.react-btn:hover{ border-color:#c9d0b4; }
+.react-btn:hover{ border-color:#FAD9A8; }
 .react-btn:active{ transform:scale(.96); }
 .react-btn .rc{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.react-btn.reacted{ border-color:#c9d0b4; background:var(--accent-tint); }
+.react-btn.reacted{ border-color:#FAD9A8; background:var(--accent-tint); }
 .react-btn.reacted .rc{ color:var(--accent); }
 
 /* ——— Документы ——— */
@@ -266,11 +270,11 @@ h1{
 .wrap > .mgr{ margin-top:10px; }
 /* Опционально: тёмный блок-обёртка (.contact) в конце страницы */
 .contact{
-  border-radius:var(--r-xl); background:var(--ink); color:#f7f5f0;
+  border-radius:var(--r-xl); background:var(--ink); color:#FFFFFF;
   padding:22px; margin:34px 0 0; display:flex; flex-direction:column; gap:16px;
 }
 .contact-lead{ font-size:22px; line-height:1.25; letter-spacing:-.02em; text-wrap:pretty; }
-.contact-lead span{ color:rgba(247,245,240,.72); }
+.contact-lead span{ color:rgba(255,255,255,.72); }
 .contact-actions{ display:flex; gap:8px; }
 .mgr{
   display:flex; align-items:center; justify-content:center; text-decoration:none;
@@ -283,7 +287,7 @@ h1{
   background:transparent; color:var(--ink);
   border:1px solid var(--line); font-weight:400; padding:14px 16px;
 }
-.contact .mgr.ghost{ flex:0 0 auto; color:#f7f5f0; border-color:rgba(247,245,240,.22); }
+.contact .mgr.ghost{ flex:0 0 auto; color:#FFFFFF; border-color:rgba(255,255,255,.22); }
 .mgr:active{ transform:translateY(1px); }
 
 /* ——— Липкая нижняя панель (опционально, нужна разметка) ——— */
@@ -296,10 +300,10 @@ h1{
   -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
   border:1px solid var(--line); box-shadow:var(--sh-lift);
 }
-.dock-label{ flex:1; font-size:13.5px; color:#4a4b45; }
+.dock-label{ flex:1; font-size:13.5px; color:#575757; }
 .dock-btn{
   padding:11px 18px; border:0; border-radius:999px; cursor:pointer;
-  background:var(--ink); color:#f7f5f0; font-size:13.5px; font-weight:600;
+  background:var(--ink); color:#FFFFFF; font-size:13.5px; font-weight:600;
 }
 .dock-btn:active{ transform:translateY(1px); }
 
@@ -323,6 +327,21 @@ h1{
 @keyframes spin{ to{ transform:rotate(360deg) } }
 @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
 
+/* ——— White-label: студийная шапка ——— */
+/* Эти два блока появились после хендоффа дизайнеру, в его файле их нет.
+   Перенесены из прошлой версии — всё на токенах, палитру подхватывают сами. */
+.brand{ display:flex; align-items:center; gap:10px; padding:20px 0 0; }
+.brand-logo{ max-height:30px; max-width:130px; object-fit:contain; }
+.brand-name{ font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+
+/* ——— Режим ухода после сдачи ——— */
+.care-guide{ border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:22px 0; margin:26px 0 0; }
+.care-guide .cg-head{ font-size:22px; letter-spacing:-.02em; font-weight:500; color:var(--ink); margin-bottom:14px; }
+.care-guide .cg-list{ margin:0; padding:0; list-style:none; }
+.care-guide .cg-list li{ font-size:16px; line-height:1.5; padding:10px 0; border-top:1px solid var(--line-soft); text-wrap:pretty; }
+.care-guide .cg-list li:first-child{ border-top:0; }
+.care-guide .cg-foot{ font-size:13px; color:var(--muted); margin-top:12px; }
+
 footer{
   font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
   text-align:center; color:var(--faint); margin-top:40px;
@@ -340,16 +359,3 @@ footer{
   .cover{ height:250px; }
   .sec{ font-size:21px; }
 }
-
-/* ——— White-label: студийная шапка (доработано для v2) ——— */
-.brand{ display:flex; align-items:center; gap:10px; padding:20px 0 0; }
-.brand-logo{ max-height:30px; max-width:130px; object-fit:contain; }
-.brand-name{ font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
-
-/* ——— Режим ухода после сдачи (доработано для v2) ——— */
-.care-guide{ border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:22px 0; margin:26px 0 0; }
-.care-guide .cg-head{ font-size:22px; letter-spacing:-.02em; font-weight:500; color:var(--ink); margin-bottom:14px; }
-.care-guide .cg-list{ margin:0; padding:0; list-style:none; }
-.care-guide .cg-list li{ font-size:16px; line-height:1.5; padding:10px 0; border-top:1px solid var(--line-soft); text-wrap:pretty; }
-.care-guide .cg-list li:first-child{ border-top:0; }
-.care-guide .cg-foot{ font-size:13px; color:var(--muted); margin-top:12px; }

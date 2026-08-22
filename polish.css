@@ -1,51 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Rethink+Sans:ital,wght@0,400..800;1,400..800&family=Hedvig+Letters+Serif:opsz@12..24&display=swap");
 /* ===== Стили приложения менеджера (index.html) ===== */
 /* Заход 2b/3b/4a — светлый редакционный вид: фон-бумага без белых карточек,
    волосяные разделители вместо рамок, моно-микрозаголовки, крупные табличные
    цифры, тёмный ink как primary, оливково-салатовый акцент, шторка снизу на мобиле.
-   Селекторы и разметка не переименованы. Без внешних шрифтов и CDN. */
+   Селекторы и разметка не переименованы. */
 
 :root{
-  --bg:#f7f5f0; --card:#f7f5f0; --raise:#fffdf9;
-  --ink:#1e1f1c; --ink-2:#3f403b; --muted:#8a8782; --faint:#a9a294;
-  --line:#e0dbd1; --line-soft:#ebe6dc; --fill:#eceae2;
-  --accent:#5d6a3c; --accent-tint:#eceee3; --accent-hi:#c4d68c;
-  --warn:#8a6a2f; --warn-tint:#f6efe2; --danger:#b4453a; --danger-tint:#f7e8e5;
-  --hover:#f1efe9; --sel:#eceae2;
-  --ring:0 0 0 3px rgba(93,106,60,.22);
-  --img-outline:inset 0 0 0 1px rgba(43,43,41,.06);
-  --shadow:0 1px 2px rgba(43,43,41,.04), 0 14px 34px -20px rgba(43,43,41,.5);
-  --lift:0 18px 44px -26px rgba(43,43,41,.55);
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --display:'Hedvig Letters Serif',Georgia,serif;
+  --bg:#FFFFFF; --card:#FFFFFF; --raise:#FFFFFF;
+  --ink:#1E3D59; --ink-2:#575757; --muted:#48749E; --faint:#575757;
+  --line:#E5E5E5; --line-soft:#F1F1F1; --fill:#F1F1F1;
+  --accent:#CD4900; --accent-tint:#FFF1DD; --accent-hi:#FA9819;
+  --warn:#48749E; --warn-tint:#DEEEFE; --danger:#F20909; --danger-tint:#FDE3E3;
+  --hover:#F1F1F1; --sel:#F1F1F1;
+  --ring:0 0 0 3px rgba(205,73,0,.22);
+  --img-outline:inset 0 0 0 1px rgba(30,61,89,.06);
+  --shadow:0 1px 2px rgba(30,61,89,.04), 0 14px 34px -20px rgba(30,61,89,.5);
+  --lift:0 18px 44px -26px rgba(30,61,89,.55);
+  --mono:'Rethink Sans',sans-serif;
   --r-xl:20px; --r-lg:16px; --r-md:13px; --r-sm:10px;
 }
-body.season-spring{ --accent:#4e7a3e; --accent-tint:#edf2e8; --accent-hi:#c9dd93; --bg:#f6f5ef; --card:#f6f5ef; --line:#e0e2d8; --sel:#eaefe4; }
-body.season-summer{ --accent:#3f6f32; --accent-tint:#ecf1e7; --accent-hi:#c4d68c; --bg:#f6f6f0; --card:#f6f6f0; --line:#dee3d6; --sel:#e7eee1; }
-body.season-autumn{ --accent:#7d5f34; --accent-tint:#f4efe4; --accent-hi:#e2c688; --bg:#f8f4ec; --card:#f8f4ec; --line:#e6ded1; --sel:#efe8db; }
-body.season-winter{ --accent:#4c6152; --accent-tint:#eaeeeb; --accent-hi:#b6ccb9; --bg:#f4f4f2; --card:#f4f4f2; --line:#dfe0dc; --muted:#86867f; --sel:#e8ece8; }
+body.season-spring{ --accent:#FA9819; --accent-tint:#FFF6E8; --accent-hi:#FFC97A; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; --sel:#FFF1DD; }
+body.season-summer{ --accent:#CD4900; --accent-tint:#FFF1DD; --accent-hi:#FA9819; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; --sel:#FFF1DD; }
+body.season-autumn{ --accent:#A03900; --accent-tint:#F7E9DC; --accent-hi:#FA9819; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; --sel:#F7E9DC; }
+body.season-winter{ --accent:#1E3D59; --accent-tint:#DEEEFE; --accent-hi:#B6C9CF; --bg:#FFFFFF; --card:#FFFFFF; --line:#E5E5E5; --muted:#575757; --sel:#E8EBEF; }
 
 *{ box-sizing:border-box; }
 html,body{
   margin:0; height:100%; font-size:15px; letter-spacing:-.003em; text-wrap:pretty;
-  font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg);
+  font-family:'Rethink Sans',-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg);
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
 body{ transition:background-color .4s ease, color .4s ease; }
 button{ font-family:inherit; cursor:pointer; }
 input,textarea,select{ font-family:inherit; font-size:15px; }
-h2,h3,#auth h1,#panel h2,.adm-top h2,.mbox h3,.card-co h3{ letter-spacing:-.025em; font-weight:600; text-wrap:balance; }
+h2,h3,#auth h1,#panel h2,.adm-top h2,.mbox h3,.card-co h3{ font-family:var(--display); font-weight:400; letter-spacing:-.025em; text-wrap:balance; }
 :focus-visible{ outline:0; box-shadow:var(--ring); border-radius:8px; }
 @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
 
 /* ── Кнопки ─────────────────────────────────────────────────────────────── */
 .btn{
-  padding:11px 16px; background:var(--ink); color:#f7f5f0; border:0; border-radius:var(--r-md);
+  padding:11px 16px; background:var(--ink); color:#FFFFFF; border:0; border-radius:var(--r-md);
   font-size:14px; font-weight:600; transition:transform .12s ease, filter .15s ease, background .15s ease;
 }
 .btn:hover:not(:disabled){ filter:brightness(1.12); }
 .btn:active:not(:disabled){ transform:scale(.97); }
 .btn:disabled{ opacity:.45; cursor:default; }
 .btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--line); font-weight:400; }
-.btn.ghost:hover:not(:disabled){ filter:none; background:var(--hover); border-color:#d8d3c8; }
+.btn.ghost:hover:not(:disabled){ filter:none; background:var(--hover); border-color:#D3D9E0; }
 .btn.danger{ background:var(--danger); }
 .btn.big{ width:100%; padding:16px; font-size:15.5px; border-radius:var(--r-lg); margin-top:4px; }
 .badge{
@@ -143,7 +145,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
 .pulse-tile.warn b{ color:var(--danger); }
 .pulse-care{
   display:flex; align-items:center; gap:10px; width:100%; margin:0;
-  padding:12px 14px; border:0; background:var(--accent-tint); color:#3f4a2c;
+  padding:12px 14px; border:0; background:var(--accent-tint); color:#A03900;
   border-radius:var(--r-lg); font-size:13.5px; font-family:inherit; cursor:pointer; text-align:left;
 }
 .pulse-care:hover{ filter:brightness(.98); }
@@ -161,7 +163,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
 }
 .chip:hover{ border-color:#d0cabd; }
 .chip:active{ transform:scale(.96); }
-.chip.active{ background:var(--ink); color:#f7f5f0; border-color:transparent; font-weight:600; }
+.chip.active{ background:var(--ink); color:#FFFFFF; border-color:transparent; font-weight:600; }
 
 #list{ flex:1; overflow:auto; padding:0 24px 20px; }
 .row{
@@ -171,7 +173,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
 }
 .row:hover{ background:var(--hover); }
 .row.sel{ background:var(--sel); box-shadow:none; }
-.row img{ width:50px; height:50px; border-radius:var(--r-md); object-fit:cover; flex:0 0 auto; background:#ece8e0; box-shadow:var(--img-outline); }
+.row img{ width:50px; height:50px; border-radius:var(--r-md); object-fit:cover; flex:0 0 auto; background:#F1F1F1; box-shadow:var(--img-outline); }
 .row .meta{ min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
 .row .meta .nm{ font-size:15.5px; font-weight:600; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .row .meta .sub{ font-size:12.5px; color:var(--muted); margin:0; display:flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums; }
@@ -183,14 +185,14 @@ button.pulse-tile:hover b{ color:var(--accent); }
 .mapfab{ position:absolute; right:16px; z-index:15; display:flex; flex-direction:column; gap:8px; }
 .mapfab button{
   width:44px; height:44px; border-radius:var(--r-md); border:1px solid var(--line);
-  background:rgba(247,245,240,.92); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  background:rgba(255,255,255,.92); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
   box-shadow:var(--shadow); font-size:17px; transition:transform .1s ease, background .15s ease;
 }
 .mapfab button:hover{ background:#fff; }
 .mapfab button:active{ transform:scale(.92); }
 .pickbar{
   position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:18;
-  background:var(--ink); color:#f7f5f0; padding:11px 18px; border-radius:999px;
+  background:var(--ink); color:#FFFFFF; padding:11px 18px; border-radius:999px;
   font-size:14px; box-shadow:var(--lift); display:none; align-items:center; gap:14px;
 }
 .pickbar button{ background:none; border:0; color:var(--accent-hi); text-decoration:none; font-size:13px; font-weight:600; }
@@ -204,13 +206,13 @@ button.pulse-tile:hover b{ color:var(--accent); }
 }
 #panel.open{ transform:none; }
 #panel .phead{ position:relative; flex:0 0 auto; }
-#panel .cover{ width:100%; height:170px; object-fit:cover; background:#ece8e0; display:block; box-shadow:var(--img-outline); }
+#panel .cover{ width:100%; height:170px; object-fit:cover; background:#F1F1F1; display:block; box-shadow:var(--img-outline); }
 #panel .pclose{
   position:absolute; top:12px; right:12px; width:36px; height:36px; border-radius:50%; border:0;
-  background:rgba(30,31,28,.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:saturate(140%) blur(6px);
+  background:rgba(30,61,89,.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:saturate(140%) blur(6px);
   color:#fff; font-size:17px; transition:transform .1s ease, background .15s ease;
 }
-#panel .pclose:hover{ background:rgba(30,31,28,.75); }
+#panel .pclose:hover{ background:rgba(30,61,89,.75); }
 #panel .pclose:active{ transform:scale(.92); }
 #panel .pclose:after{ content:''; position:absolute; inset:-3px; }
 #panel .pbody{ flex:1; overflow:auto; padding:20px 22px 24px; }
@@ -223,13 +225,13 @@ button.pulse-tile:hover b{ color:var(--accent); }
 /* Этапы */
 .stages-wrap{ margin:16px 0 18px; }
 .stages{ display:flex; gap:4px; }
-.stages .seg{ flex:1; height:4px; border-radius:2px; background:#ddd8cd; transition:background .3s ease; }
+.stages .seg{ flex:1; height:4px; border-radius:2px; background:#E5E5E5; transition:background .3s ease; }
 .stages-cap{ font-size:17px; font-weight:500; color:var(--ink); margin-top:12px; }
 
 /* Маршруты и действия */
 .routes{ display:flex; gap:8px; margin:16px 0; }
 .routes a{ flex:1; text-align:center; padding:12px; border-radius:var(--r-md); text-decoration:none; font-size:13.5px; font-weight:600; }
-.routes a.ya{ background:var(--ink); color:#f7f5f0; }
+.routes a.ya{ background:var(--ink); color:#FFFFFF; }
 .routes a.gis{ background:var(--accent-tint); color:var(--accent); }
 .pactions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
 .pactions .btn{ flex:1 1 auto; font-size:13px; padding:10px 12px; white-space:nowrap; }
@@ -253,7 +255,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
 .fvis-btn:hover{ border-color:#d0cabd; }
 /* Запись, ждущая согласования — единственная в рамке */
 .feed-item.pending, .feed-item:has(.fvis.pending){
-  border:1px solid #d8cbb8; border-radius:var(--r-xl); background:var(--raise);
+  border:1px solid #D3D9E0; border-radius:var(--r-xl); background:var(--raise);
   padding:16px; margin:0 0 10px;
 }
 
@@ -265,9 +267,9 @@ button.pulse-tile:hover b{ color:var(--accent); }
 .filehint{ font-size:12px; color:var(--muted); }
 .camera-btn{
   display:flex; align-items:center; justify-content:center; gap:9px; width:100%;
-  padding:17px; background:var(--ink); color:#f7f5f0; border-radius:var(--r-lg);
+  padding:17px; background:var(--ink); color:#FFFFFF; border-radius:var(--r-lg);
   font-size:15.5px; font-weight:600; cursor:pointer;
-  box-shadow:0 14px 30px -18px rgba(30,31,28,.95); transition:transform .12s ease, filter .15s ease;
+  box-shadow:0 14px 30px -18px rgba(30,61,89,.95); transition:transform .12s ease, filter .15s ease;
 }
 .camera-btn:hover{ filter:brightness(1.15); }
 .camera-btn:active{ transform:scale(.97); }
@@ -320,7 +322,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
   cursor:pointer; background:transparent; transition:background .12s ease;
 }
 .act-item:hover{ background:var(--hover); }
-.act-item img{ width:54px; height:54px; border-radius:var(--r-md); object-fit:cover; flex:0 0 auto; background:#ece8e0; box-shadow:var(--img-outline); }
+.act-item img{ width:54px; height:54px; border-radius:var(--r-md); object-fit:cover; flex:0 0 auto; background:#F1F1F1; box-shadow:var(--img-outline); }
 .act-item .ai-obj{ font-size:15px; font-weight:600; letter-spacing:-.01em; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .act-item .ai-body{ font-size:14px; line-height:1.45; margin-top:4px; }
 .act-item .ai-time{ font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:5px; }
@@ -329,9 +331,11 @@ button.pulse-tile:hover b{ color:var(--accent); }
 .content-cell img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--r-md); cursor:pointer; box-shadow:var(--img-outline); transition:transform .12s ease; }
 .content-cell img:hover{ transform:scale(1.01); }
 .content-cell .cc-obj{ font-size:11.5px; color:var(--muted); margin-top:5px; }
-.content-cell .cc-rm{ position:absolute; top:6px; right:6px; background:rgba(30,31,28,.55); color:#fff; border:0; border-radius:50%; width:26px; height:26px; cursor:pointer; }
+.content-cell .cc-rm{ position:absolute; top:6px; right:6px; background:rgba(30,61,89,.55); color:#fff; border:0; border-radius:50%; width:26px; height:26px; cursor:pointer; }
 
-/* ── Календарь (в стиле v2: моно-заголовки групп, строки-разделители) ───── */
+/* ── Календарь ──────────────────────────────────────────────────────────── */
+/* Экран появился после хендоффа дизайнеру, поэтому в его файле этих правил нет.
+   Перенесено из прошлой версии — всё на токенах, палитру подхватывает само. */
 .cal-group{ margin:0; }
 .cal-gh{ font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); padding:22px 24px 8px; }
 .cal-over .cal-gh{ color:var(--danger); }
@@ -379,13 +383,13 @@ button.pulse-tile:hover b{ color:var(--accent); }
 
 /* ── Модалка ────────────────────────────────────────────────────────────── */
 #modal{
-  position:fixed; inset:0; background:rgba(30,31,28,.45); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  position:fixed; inset:0; background:rgba(30,61,89,.45); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
   display:none; align-items:center; justify-content:center; z-index:40; padding:16px;
 }
 #modal.open{ display:flex; }
 .mbox{
   background:var(--bg); border-radius:24px; width:420px; max-width:100%; max-height:90vh;
-  overflow:auto; padding:24px; box-shadow:0 8px 16px rgba(43,43,41,.10), 0 30px 70px -30px rgba(43,43,41,.6);
+  overflow:auto; padding:24px; box-shadow:0 8px 16px rgba(30,61,89,.10), 0 30px 70px -30px rgba(30,61,89,.6);
 }
 .mbox h3{ margin:0 0 18px; font-size:26px; line-height:1.05; letter-spacing:-.03em; }
 .field{ margin-bottom:14px; }
@@ -406,7 +410,7 @@ button.pulse-tile:hover b{ color:var(--accent); }
 /* ── Тосты, лайтбокс, очередь ───────────────────────────────────────────── */
 #toast{
   position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
-  background:var(--ink); color:#f7f5f0; padding:13px 20px; border-radius:999px;
+  background:var(--ink); color:#FFFFFF; padding:13px 20px; border-radius:999px;
   font-size:14px; z-index:60; opacity:0; transition:opacity .2s; box-shadow:var(--lift);
 }
 #toast.show{ opacity:1; }
@@ -428,14 +432,10 @@ button.pulse-tile:hover b{ color:var(--accent); }
 
 /* ── Мобильная раскладка: карта во весь экран, панель — шторка снизу ────── */
 @media (max-width:640px){
-  header{ height:56px; padding:0 12px; gap:8px; }
-  .hmenu{ display:block; flex:0 0 auto; }
-  .logo, .who, header .spacer{ display:none; }
-  /* вкладки сжимаются и скроллятся, колокольчик и аккаунт всегда видны */
-  .viewtabs{ flex:1 1 auto; min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .viewtabs::-webkit-scrollbar{ display:none; }
-  .vt{ padding:6px 10px; white-space:nowrap; }
-  .bell, .acct{ flex:0 0 auto; }
+  header{ height:56px; padding:0 14px; gap:10px; }
+  .hmenu{ display:block; }
+  .logo, .who{ display:none; }
+  .vt{ padding:7px 12px; }
 
   #sidebar{ position:absolute; top:0; left:0; height:100%; width:100%; z-index:30;
             transform:translateX(-105%); transition:transform .25s; box-shadow:var(--lift); }
@@ -452,13 +452,13 @@ button.pulse-tile:hover b{ color:var(--accent); }
   #panel{
     top:auto; left:0; right:0; bottom:0; height:88%; width:100%; max-width:100%;
     border-radius:26px 26px 0 0; transform:translateY(105%); overflow:hidden;
-    box-shadow:0 -18px 44px -26px rgba(43,43,41,.55);
+    box-shadow:0 -18px 44px -26px rgba(30,61,89,.55);
   }
   #panel.open{ transform:none; }
   #panel .cover{ height:200px; border-radius:26px 26px 0 0; }
   .phandle{
     display:block; position:absolute; top:9px; left:50%; transform:translateX(-50%);
-    width:38px; height:4px; border-radius:999px; background:rgba(247,245,240,.9); z-index:2;
+    width:38px; height:4px; border-radius:999px; background:rgba(255,255,255,.9); z-index:2;
   }
   #panel .pbody{ padding:18px 20px 24px; }
   #panel h2{ font-size:30px; }
